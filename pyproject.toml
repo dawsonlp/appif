@@ -1,0 +1,120 @@
+[project]
+name = "appif"
+version = "1.0.0"
+description = "Messaging connectors giving AI agents authenticated, normalized access to email and chat platforms"
+authors = [{name = "ldawson"}]
+readme = "readme.md"
+requires-python = ">=3.13"
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    # HTTP client
+    "httpx>=0.28,<1.0",
+    # Configuration
+    "python-dotenv>=1.0",
+    # Logging
+    "structlog>=24.4",
+    # Retry / backoff
+    "tenacity>=9.0",
+    # HTML parsing (email normalizers)
+    "beautifulsoup4>=4.12",
+    # Gmail
+    "google-api-python-client>=2.160",
+    "google-auth-oauthlib>=1.2",
+    # Outlook / Microsoft 365
+    "msgraph-sdk>=1.14",
+    "azure-identity>=1.19",
+    "msal>=1.31",
+    # Slack
+    "slack-sdk>=3.33",
+    "slack-bolt>=1.21",
+    # CLI
+    "typer>=0.15",
+    "rich>=13.9",
+    # Jira (work tracking)
+    "atlassian-python-api>=4.0",
+    "pyyaml>=6.0",
+    # Validation (command objects)
+    "pydantic>=2.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+    "black>=25.1",
+    "mypy>=1.14",
+]
+
+[project.scripts]
+appif-slack = "appif.cli.slack:app"
+appif-outlook = "appif.cli.outlook:app"
+
+[project.urls]
+Homepage = "https://github.com/dawsonlp/appif"
+Repository = "https://github.com/dawsonlp/appif"
+Changelog = "https://github.com/dawsonlp/appif/blob/main/CHANGELOG.md"
+Issues = "https://github.com/dawsonlp/appif/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/appif"]
+
+# --- Tool Configuration ---
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = [
+    "N803",   # argument name casing (unittest mock patches use PascalCase)
+    "N806",   # variable name casing (unittest mock patches)
+    "N818",   # exception name suffix (domain errors don't need "Error" suffix)
+    "B011",   # assert False (used in tests for deliberate failure)
+    "SIM103", # return-bool-op-compare (readability preference)
+    "SIM105", # use-contextlib-suppress (readability preference)
+    "SIM108", # ternary operator (readability preference)
+    "B008",   # function-call-in-default-argument (used intentionally)
+    "E501",   # line too long (handled by formatter)
+    "UP047",  # generic-type-param syntax (TypeVar style still valid)
+    "E402",   # module-level import not at top (integration tests need setup before imports)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["appif"]
+
+[tool.black]
+target-version = ["py313"]
+line-length = 120
+
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"

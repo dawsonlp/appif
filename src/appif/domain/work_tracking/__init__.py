@@ -1,0 +1,71 @@
+"""Work tracking domain -- platform-agnostic types and protocols."""
+
+from appif.domain.work_tracking.errors import (
+    ConnectionFailure,
+    InstanceAlreadyRegistered,
+    InstanceNotFound,
+    InvalidTransition,
+    ItemNotFound,
+    NoDefaultInstance,
+    PermissionDenied,
+    ProjectNotFound,
+    RateLimited,
+    WorkTrackingError,
+)
+from appif.domain.work_tracking.models import (
+    AttachmentContent,
+    CreateItemRequest,
+    CreateProjectRequest,
+    InstanceInfo,
+    IssueTypeInfo,
+    ItemAttachment,
+    ItemAuthor,
+    ItemCategory,
+    ItemComment,
+    ItemIdentifier,
+    ItemLink,
+    LinkType,
+    LinkTypeInfo,
+    ProjectInfo,
+    SearchCriteria,
+    SearchResult,
+    TransitionInfo,
+    WorkItem,
+)
+from appif.domain.work_tracking.ports import InstanceRegistry, WorkTracker
+
+__all__ = [
+    # Models
+    "AttachmentContent",
+    "CreateItemRequest",
+    "CreateProjectRequest",
+    "InstanceInfo",
+    "IssueTypeInfo",
+    "ItemAttachment",
+    "ItemAuthor",
+    "ItemCategory",
+    "ItemComment",
+    "ItemIdentifier",
+    "ItemLink",
+    "LinkType",
+    "LinkTypeInfo",
+    "ProjectInfo",
+    "SearchCriteria",
+    "SearchResult",
+    "TransitionInfo",
+    "WorkItem",
+    # Errors
+    "ConnectionFailure",
+    "InstanceAlreadyRegistered",
+    "InstanceNotFound",
+    "InvalidTransition",
+    "ItemNotFound",
+    "NoDefaultInstance",
+    "PermissionDenied",
+    "ProjectNotFound",
+    "RateLimited",
+    "WorkTrackingError",
+    # Protocols
+    "InstanceRegistry",
+    "WorkTracker",
+]

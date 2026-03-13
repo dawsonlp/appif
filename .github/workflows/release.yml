@@ -1,0 +1,52 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write    # trusted publishing (PyPI)
+      contents: write    # create GitHub Release
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Extract changelog for this version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          python3 << 'PYEOF'
+          import re, os
+          version = os.environ["GITHUB_REF"].replace("refs/tags/v", "")
+          text = open("CHANGELOG.md").read()
+          pattern = rf"## \[{re.escape(version)}\].*?\n(.*?)(?=\n## \[|$)"
+          match = re.search(pattern, text, re.DOTALL)
+          body = match.group(1).strip() if match else "See CHANGELOG.md for details."
+          with open("release_notes.md", "w") as f:
+              f.write(body)
+          PYEOF
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          generate_release_notes: false

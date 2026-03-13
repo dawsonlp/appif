@@ -17,18 +17,16 @@ import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TransientFailure
 from appif.domain.messaging.models import (
-    BackfillScope,
     ConversationRef,
     MessageContent,
     MessageEvent,
@@ -268,7 +266,7 @@ def folders() -> None:
 def inbox(
     limit: Annotated[int, typer.Option("--limit", "-n", help="Number of messages to show")] = 10,
     since: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=_complete_since),
     ] = None,
 ) -> None:
@@ -336,7 +334,7 @@ def send(
     to: Annotated[str, typer.Argument(help="Recipient email address")],
     text: Annotated[str, typer.Argument(help="Message body")],
     subject: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--subject", "-s", help="Subject line (default: 'appif test')"),
     ] = None,
 ) -> None:
@@ -409,7 +407,7 @@ def send(
 @app.command()
 def consent(
     account: Annotated[str, typer.Option("--account", "-a", help="Account label")] = "default",
-    tenant: Annotated[Optional[str], typer.Option("--tenant", "-t", help="Azure AD tenant ID")] = None,
+    tenant: Annotated[str | None, typer.Option("--tenant", "-t", help="Azure AD tenant ID")] = None,
 ) -> None:
     """Run the OAuth consent flow (opens a browser)."""
     import subprocess

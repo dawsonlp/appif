@@ -95,6 +95,8 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "UP047",  # generic-type-param syntax (TypeVar style still valid)
     "E402",   # module-level import not at top (integration tests need setup before imports)
+    "B904",   # raise-without-from-inside-except (CLI exits intentionally discard exceptions)
+    "A002",   # builtin-argument-shadowing (CLI params like --type map to natural names)
 ]
 
 [tool.ruff.lint.isort]

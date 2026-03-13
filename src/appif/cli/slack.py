@@ -17,7 +17,7 @@ import os
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from dotenv import load_dotenv
@@ -483,7 +483,7 @@ def _register_commands(sub_app: typer.Typer, identity: str) -> None:
     @sub_app.command()
     def channels(
         type: Annotated[
-            Optional[str],
+            str | None,
             typer.Option("--type", "-t", help="Filter by type: channel, dm, group"),
         ] = None,
     ) -> None:
@@ -493,11 +493,11 @@ def _register_commands(sub_app: typer.Typer, identity: str) -> None:
     @sub_app.command()
     def messages(
         channel: Annotated[
-            Optional[str],
+            str | None,
             typer.Option("--channel", "-c", help="Filter to one channel", autocompletion=_complete_channels),
         ] = None,
         since: Annotated[
-            Optional[str],
+            str | None,
             typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=_complete_since),
         ] = None,
         limit: Annotated[

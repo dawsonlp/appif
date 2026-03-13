@@ -97,6 +97,7 @@ ignore = [
     "E402",   # module-level import not at top (integration tests need setup before imports)
     "B904",   # raise-without-from-inside-except (CLI exits intentionally discard exceptions)
     "A002",   # builtin-argument-shadowing (CLI params like --type map to natural names)
+    "N817",   # CamelCase imported as acronym (short aliases in scripts)
 ]
 
 [tool.ruff.lint.isort]

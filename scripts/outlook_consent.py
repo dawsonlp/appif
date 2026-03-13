@@ -19,10 +19,10 @@ Prerequisites:
     6. After consent the MSAL token cache is stored in:
          ~/.config/appif/outlook/<account>.json
 """
+
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from pathlib import Path
@@ -113,7 +113,7 @@ def main() -> None:
     print(f"   Account label : {account}")
     print(f"   User email    : {email}")
     print(f"   Scopes        : {', '.join(SCOPES)}")
-    print(f"\n   The Outlook connector will load this cache on connect().")
+    print("\n   The Outlook connector will load this cache on connect().")
 
 
 if __name__ == "__main__":

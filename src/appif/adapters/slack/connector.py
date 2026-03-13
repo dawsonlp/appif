@@ -66,12 +66,8 @@ class SlackConnector:
 
     # -- construction ---------------------------------------------------------
 
-    def __init__(
-        self, *, identity_token: str, app_token: str | None = None
-    ) -> None:
-        self._auth = StaticTokenAuth(
-            identity_token=identity_token, app_token=app_token
-        )
+    def __init__(self, *, identity_token: str, app_token: str | None = None) -> None:
+        self._auth = StaticTokenAuth(identity_token=identity_token, app_token=app_token)
         self._auth.validate()
 
         self._status = ConnectorStatus.DISCONNECTED

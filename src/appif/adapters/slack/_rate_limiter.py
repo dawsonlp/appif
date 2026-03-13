@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 # Slack API error codes that map to specific connector errors
-_AUTH_ERRORS = frozenset({"not_authed", "invalid_auth", "account_inactive", "token_revoked", "token_expired", "missing_scope"})
+_AUTH_ERRORS = frozenset(
+    {"not_authed", "invalid_auth", "account_inactive", "token_revoked", "token_expired", "missing_scope"}
+)
 _TARGET_ERRORS = frozenset({"channel_not_found", "not_in_channel", "is_archived", "user_not_found"})
 _RATE_LIMIT_ERRORS = frozenset({"ratelimited"})
 

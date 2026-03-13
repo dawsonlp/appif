@@ -19,26 +19,30 @@ Usage:
     python scripts/email_evaluator.py --interval 60      # poll every 60s instead of 30s
     python scripts/email_evaluator.py --batch 10         # one-shot: evaluate last 10 messages and exit
 """
+
 from __future__ import annotations
 
 import argparse
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Load environment
 # ---------------------------------------------------------------------------
 
+
 def _load_env():
     try:
         from dotenv import load_dotenv
+
         env_path = Path.home() / ".env"
         if env_path.exists():
             load_dotenv(env_path)
     except ImportError:
         pass
+
 
 _load_env()
 
@@ -90,9 +94,11 @@ def _load_prompt() -> str:
         return prompt_path.read_text()
     return _FALLBACK_PROMPT
 
+
 # ---------------------------------------------------------------------------
 # Claude evaluation via langchain
 # ---------------------------------------------------------------------------
+
 
 def _get_evaluator():
     api_key = os.environ.get("CLAUDE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
@@ -145,9 +151,10 @@ def _evaluate_and_print(llm, event):
 # Connector setup
 # ---------------------------------------------------------------------------
 
+
 def _make_connector(poll_interval: int = 30):
     """Create a GmailConnector configured from environment."""
-    from appif.adapters.gmail import GmailConnector, FileCredentialAuth
+    from appif.adapters.gmail import FileCredentialAuth, GmailConnector
 
     return GmailConnector(
         auth=FileCredentialAuth(),
@@ -158,6 +165,7 @@ def _make_connector(poll_interval: int = 30):
 # ---------------------------------------------------------------------------
 # Watch mode -- register a listener, let the poller deliver events
 # ---------------------------------------------------------------------------
+
 
 class _EvalListener:
     """MessageListener that classifies incoming emails with Claude."""
@@ -197,6 +205,7 @@ def run_watch(interval: int = 30):
 
         # Block until interrupted
         import time
+
         while True:
             time.sleep(1)
 
@@ -210,6 +219,7 @@ def run_watch(interval: int = 30):
 # ---------------------------------------------------------------------------
 # Batch mode -- use backfill to fetch recent messages
 # ---------------------------------------------------------------------------
+
 
 def run_once(count: int = 10):
     """Evaluate the most recent messages using backfill."""
@@ -231,8 +241,9 @@ def run_once(count: int = 10):
         connector.connect()
 
         from appif.domain.messaging.models import BackfillScope
+
         scope = BackfillScope(
-            oldest=datetime.now(timezone.utc) - timedelta(days=7),
+            oldest=datetime.now(UTC) - timedelta(days=7),
         )
         connector.backfill(connector.list_accounts()[0].account_id, scope)
     finally:
@@ -253,9 +264,12 @@ def run_once(count: int = 10):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Gmail email evaluator powered by Claude")
-    parser.add_argument("--batch", type=int, default=None, metavar="N", help="One-shot: evaluate last N messages and exit")
+    parser.add_argument(
+        "--batch", type=int, default=None, metavar="N", help="One-shot: evaluate last N messages and exit"
+    )
     parser.add_argument("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
     args = parser.parse_args()
 

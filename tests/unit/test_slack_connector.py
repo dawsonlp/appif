@@ -103,9 +103,7 @@ class TestAuthFromEnv:
             "APPIF_SLACK_IDENTITY_TOKEN": "xoxb-from-env",
             "APPIF_SLACK_APP_TOKEN": "xapp-from-env",
         }
-        with patch.dict(os.environ, env, clear=False), patch(
-            "appif.adapters.slack._auth.load_dotenv"
-        ):
+        with patch.dict(os.environ, env, clear=False), patch("appif.adapters.slack._auth.load_dotenv"):
             auth = StaticTokenAuth.from_env()
 
         assert auth.identity_token == "xoxb-from-env"
@@ -115,9 +113,7 @@ class TestAuthFromEnv:
         env = {
             "APPIF_SLACK_IDENTITY_TOKEN": "xoxb-from-env",
         }
-        with patch.dict(os.environ, env, clear=True), patch(
-            "appif.adapters.slack._auth.load_dotenv"
-        ):
+        with patch.dict(os.environ, env, clear=True), patch("appif.adapters.slack._auth.load_dotenv"):
             auth = StaticTokenAuth.from_env()
 
         assert auth.identity_token == "xoxb-from-env"
@@ -128,9 +124,7 @@ class TestAuthFromEnv:
             "APPIF_SLACK_IDENTITY_TOKEN": "xoxb-from-env",
             "APPIF_SLACK_APP_TOKEN": "",
         }
-        with patch.dict(os.environ, env, clear=False), patch(
-            "appif.adapters.slack._auth.load_dotenv"
-        ):
+        with patch.dict(os.environ, env, clear=False), patch("appif.adapters.slack._auth.load_dotenv"):
             auth = StaticTokenAuth.from_env()
 
         assert auth.app_token is None

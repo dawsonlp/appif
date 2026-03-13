@@ -54,19 +54,21 @@ def normalize_message(
     if user_id and user_id == authenticated_user_id:
         return None
 
-    identity = resolve_user(user_id) if user_id else Identity(
-        id="unknown",
-        display_name="unknown",
-        connector="slack",
+    identity = (
+        resolve_user(user_id)
+        if user_id
+        else Identity(
+            id="unknown",
+            display_name="unknown",
+            connector="slack",
+        )
     )
 
     ts: str = event.get("ts", "")
     thread_ts: str | None = event.get("thread_ts")
     channel: str = event.get("channel", "")
 
-    timestamp = (
-        datetime.fromtimestamp(float(ts), tz=UTC) if ts else datetime.now(tz=UTC)
-    )
+    timestamp = datetime.fromtimestamp(float(ts), tz=UTC) if ts else datetime.now(tz=UTC)
 
     conversation_ref = ConversationRef(
         connector="slack",

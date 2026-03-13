@@ -23,9 +23,9 @@ jobs:
           source .venv/bin/activate
           uv pip install ".[dev]"
       - name: Ruff check
-        run: .venv/bin/ruff check src/ tests/
+        run: .venv/bin/ruff check src/ tests/ scripts/ conftest.py
       - name: Ruff format check
-        run: .venv/bin/ruff format --check src/ tests/
+        run: .venv/bin/ruff format --check src/ tests/ scripts/ conftest.py
 
   test:
     name: Unit Tests

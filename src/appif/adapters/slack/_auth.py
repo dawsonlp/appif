@@ -77,9 +77,7 @@ class StaticTokenAuth:
         connector operates in API-only mode without real-time events.
     """
 
-    def __init__(
-        self, *, identity_token: str, app_token: str | None = None
-    ) -> None:
+    def __init__(self, *, identity_token: str, app_token: str | None = None) -> None:
         self._identity_token = identity_token
         self._app_token = app_token
 

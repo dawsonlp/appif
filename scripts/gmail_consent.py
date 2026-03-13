@@ -189,7 +189,7 @@ def main():
     print("=" * 60)
     print(f"  Account:     {account}")
     print(f"  Credentials: {cred_path}")
-    print(f"  Permissions: 600 (owner read/write only)")
+    print("  Permissions: 600 (owner read/write only)")
     print()
     print("Ensure ~/.env contains:")
     print(f"  APPIF_GMAIL_ACCOUNT={account}")

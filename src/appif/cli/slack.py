@@ -293,8 +293,7 @@ def _cmd_messages(identity: str, channel: str | None, since: str | None, limit: 
             if not matched:
                 console.print(
                     Panel(
-                        f"[bold red]Channel not found:[/bold red] {channel}\n\n"
-                        f"Try: appif-slack {identity} channels",
+                        f"[bold red]Channel not found:[/bold red] {channel}\n\nTry: appif-slack {identity} channels",
                         title="Error",
                         border_style="red",
                     )
@@ -405,7 +404,7 @@ def _cmd_send(identity: str, target: str, text: str) -> None:
                     Panel(
                         f"[bold red]Cannot list channels:[/bold red] {exc}\n\n"
                         f"Tip: If you know the channel ID, pass it directly:\n"
-                        f"  appif-slack {identity} send D0ABC123XYZ \"{text[:30]}...\"",
+                        f'  appif-slack {identity} send D0ABC123XYZ "{text[:30]}..."',
                         title="Error",
                         border_style="red",
                     )
@@ -416,8 +415,7 @@ def _cmd_send(identity: str, target: str, text: str) -> None:
             if not matched:
                 console.print(
                     Panel(
-                        f"[bold red]Target not found:[/bold red] {target}\n\n"
-                        f"Try: appif-slack {identity} channels",
+                        f"[bold red]Target not found:[/bold red] {target}\n\nTry: appif-slack {identity} channels",
                         title="Error",
                         border_style="red",
                     )

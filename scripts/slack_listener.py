@@ -33,10 +33,7 @@ class _PrintListener:
     """Simple listener that prints every message to stdout."""
 
     def on_message(self, event: MessageEvent) -> None:
-        print(
-            f"[{event.timestamp:%H:%M:%S}] "
-            f"{event.author.display_name}: {event.content.text}"
-        )
+        print(f"[{event.timestamp:%H:%M:%S}] {event.author.display_name}: {event.content.text}")
 
 
 def main() -> None:

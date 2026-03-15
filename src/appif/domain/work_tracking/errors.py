@@ -8,8 +8,10 @@ interface.
 
 from __future__ import annotations
 
+from appif.domain.errors import AppifError
 
-class WorkTrackingError(Exception):
+
+class WorkTrackingError(AppifError):
     """Base error for all work tracking failures."""
 
     def __init__(self, message: str = "", instance: str | None = None):

@@ -6,8 +6,10 @@ and mapped to one of these types. They never leak through the public
 interface.
 """
 
+from appif.domain.errors import AppifError
 
-class ConnectorError(Exception):
+
+class ConnectorError(AppifError):
     """Base error for all connector failures."""
 
     def __init__(self, connector: str, message: str = ""):

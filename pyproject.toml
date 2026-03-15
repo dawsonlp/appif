@@ -1,6 +1,6 @@
 [project]
 name = "appif"
-version = "1.0.0"
+version = "1.1.0"
 description = "Messaging connectors giving AI agents authenticated, normalized access to email and chat platforms"
 authors = [{name = "ldawson"}]
 readme = "readme.md"

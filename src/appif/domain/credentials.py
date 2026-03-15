@@ -7,7 +7,7 @@ present?) from network authentication (does the service accept them?).
 
 from __future__ import annotations
 
-from typing import Generic, Protocol, TypeVar
+from typing import Protocol, TypeVar
 
 T = TypeVar("T", covariant=True)
 

@@ -15,6 +15,7 @@ from appif.domain.work_tracking.models import (
     CreateProjectRequest,
     InstanceInfo,
     IssueTypeInfo,
+    ItemAttachment,
     ItemComment,
     ItemIdentifier,
     LinkType,
@@ -129,6 +130,45 @@ class WorkTracker(Protocol):
 
         Future versions may introduce a streaming variant via a separate
         method; this method will always return fully-buffered content.
+        """
+        ...
+
+    def attach_file(
+        self,
+        key: str,
+        filename: str,
+        content: bytes,
+        *,
+        instance: str | None = None,
+    ) -> ItemAttachment:
+        """Attach a file to a work item.
+
+        Parameters
+        ----------
+        key:
+            Work item key (e.g. ``"PROJ-123"``).
+        filename:
+            Filename to use on the platform (e.g. ``"requirements.md"``).
+        content:
+            Complete file content as bytes. Must be non-empty.
+        instance:
+            Optional instance name. Uses default if omitted.
+
+        Returns
+        -------
+        ItemAttachment
+            Metadata for the newly created attachment, including the
+            platform-assigned ``id``, confirmed ``filename``,
+            ``mime_type``, ``size_bytes``, ``created``, and ``author``.
+
+        Raises
+        ------
+        WorkTrackingError
+            If filename is empty or content is empty.
+        ItemNotFound
+            If the work item does not exist.
+        PermissionDenied
+            If the caller lacks permission to attach files.
         """
         ...
 

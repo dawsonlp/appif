@@ -21,6 +21,7 @@ from appif.domain.work_tracking.models import (
     CreateProjectRequest,
     InstanceInfo,
     IssueTypeInfo,
+    ItemAttachment,
     ItemComment,
     ItemIdentifier,
     LinkType,
@@ -198,6 +199,16 @@ class WorkTrackingService:
         instance: str | None = None,
     ) -> AttachmentContent:
         return self._resolve(instance).download_attachment(attachment_id)
+
+    def attach_file(
+        self,
+        key: str,
+        filename: str,
+        content: bytes,
+        *,
+        instance: str | None = None,
+    ) -> ItemAttachment:
+        return self._resolve(instance).attach_file(key, filename, content)
 
     def list_projects(self, *, instance: str | None = None) -> list[ProjectInfo]:
         return self._resolve(instance).list_projects()

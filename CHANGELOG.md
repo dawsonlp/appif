@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-03-29
+
+### Added
+
+- **Work tracking: file attachment upload** (`attach_file()`) -- attach
+  caller-provided file content to a work item and receive platform-assigned
+  `ItemAttachment` metadata. Completes the attachment lifecycle alongside
+  the existing `download_attachment()`. (W13, CLI-03)
+
 ## [1.0.0] - 2026-03-13
 
 ### Initial Release
@@ -28,4 +37,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI (lint + test) and release (build + publish to PyPI) workflows
 - GPL-3.0-or-later license
 
+[1.2.0]: https://github.com/dawsonlp/appif/releases/tag/v1.2.0
 [1.0.0]: https://github.com/dawsonlp/appif/releases/tag/v1.0.0

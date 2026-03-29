@@ -224,6 +224,29 @@ class TestJiraCRUDLifecycle:
         assert proj.name  # Should have a name
         assert proj.project_type  # Should report a type (e.g. "software")
 
+    def test_12_attach_and_download_round_trip(self, service):
+        """Attach a file, verify it appears on the item, download and verify content matches."""
+        key = self.__class__._item_key
+        content = b"# Test Attachment\n\nCreated by test_jira_integration.py attach_file test."
+        filename = "test_attachment.md"
+
+        # Upload
+        attachment = service.attach_file(key, filename, content)
+
+        assert attachment.filename == filename
+        assert attachment.size_bytes == len(content)
+        assert attachment.id  # platform-assigned
+
+        # Verify it appears on the work item
+        item = service.get_item(key)
+        attachment_ids = [a.id for a in item.attachments]
+        assert attachment.id in attachment_ids
+
+        # Download and verify content
+        downloaded = service.download_attachment(attachment.id)
+        assert downloaded.data == content
+        assert downloaded.metadata.filename == filename
+
     def test_99_record_created_keys(self, service, tmp_path_factory):
         """Write created keys to a file for the cleanup script."""
         if _created_keys:

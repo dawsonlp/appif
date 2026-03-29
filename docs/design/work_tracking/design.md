@@ -87,6 +87,7 @@ They share:
 | **Create projects** | Create new projects with key, name, type, lead |
 | **Delete projects** | Remove a project by key (irreversible) |
 | **Multi-instance management** | Register, list, remove platform instances at runtime |
+| **Upload attachments** | Attach caller-provided file content to a work item (W13, added 2026-03-29) |
 | **Authentication** | Per-instance credential management |
 | **Error translation** | Map platform errors to domain exceptions |
 
@@ -95,7 +96,7 @@ They share:
 | Concern | Why excluded |
 |---------|-------------|
 | Event-driven monitoring | Different interaction pattern; may reuse Connector model later |
-| Attachment upload | Write-side attachment support; download is supported (v0.6.0) |
+| Attachment delete/replace/versioning | Write-side management beyond upload; upload is supported (W13) |
 | Sprint/iteration management | Administrative, not agent workflow |
 | Board/view management | UI concern |
 | User management | Administrative |
@@ -380,6 +381,7 @@ default is set and `instance` is omitted, an error is raised.
 | `link_items(from_key, to_key, link_type, instance?)` | Create a relationship |
 | `search(criteria, offset?, limit?, instance?)` | Search for work items |
 | `download_attachment(attachment_id, instance?)` | Download attachment content by ID |
+| `attach_file(key, filename, content, instance?)` | Upload file content as an attachment to a work item (W13) |
 | `list_projects(instance?)` | Return all accessible projects |
 | `get_project(key, instance?)` | Retrieve a single project by key |
 | `create_project(request, instance?)` | Create a new project |

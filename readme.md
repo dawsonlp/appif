@@ -53,6 +53,20 @@ item = service.create_item(CreateItemRequest(
 ))
 print(f"Created: {item.key}")
 
+# Attach a file to a ticket
+from pathlib import Path
+
+attachment = service.attach_file(
+    "MYPROJECT-42",
+    "requirements.md",
+    Path("requirements.md").read_bytes(),
+)
+print(f"Attached: {attachment.filename} ({attachment.size_bytes} bytes)")
+
+# Download an attachment
+content = service.download_attachment(attachment.id)
+Path("downloaded.md").write_bytes(content.data)
+
 # Search
 results = service.search(SearchCriteria(project="MYPROJECT", status="To Do"))
 for item in results.items:
@@ -187,7 +201,7 @@ appif/
 │       ├── cli/                     # CLI entry points (Slack)
 │       └── infrastructure/          # Credential loading
 ├── tests/
-│   ├── unit/                        # 323 unit tests
+│   ├── unit/                        # 329 unit tests
 │   ├── integration/                 # Live API tests (Slack, Jira)
 │   └── e2e/
 ├── scripts/                         # OAuth consent flows, cleanup utilities
@@ -206,7 +220,7 @@ uv venv .venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# Run all unit tests (323 tests)
+# Run all unit tests (329 tests)
 pytest tests/unit -v
 
 # Run adapter-specific tests
@@ -246,7 +260,7 @@ All connectors produce identical canonical types (`MessageEvent`, `ConversationR
 
 The Jira adapter implements the `WorkTracker` protocol (`appif.domain.work_tracking.ports.WorkTracker`):
 
-- CRUD operations: get, create, comment, transition, link, search, project management
+- CRUD operations: get, create, comment, transition, link, search, attach/download files, project management
 - Multi-instance support via `InstanceRegistry` protocol
 - `WorkTrackingService` routes operations to the correct adapter instance
 - Domain types (`WorkItem`, `CreateItemRequest`, `ItemCategory`, `SearchCriteria`) are platform-agnostic

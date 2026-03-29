@@ -6,6 +6,7 @@ connected to one Jira Cloud (or Server) instance.
 
 from __future__ import annotations
 
+import io
 import logging
 
 from atlassian import Jira
@@ -35,6 +36,7 @@ from appif.domain.work_tracking.models import (
     CreateItemRequest,
     CreateProjectRequest,
     IssueTypeInfo,
+    ItemAttachment,
     ItemCategory,
     ItemComment,
     ItemIdentifier,
@@ -327,6 +329,53 @@ class JiraAdapter:
             )
 
             return AttachmentContent(metadata=metadata, data=response.content)
+        except (ItemNotFound, WorkTrackingError):
+            raise
+        except Exception as exc:
+            raise _translate_error(exc, self._instance_name) from exc
+
+    def attach_file(self, key: str, filename: str, content: bytes) -> ItemAttachment:
+        """Attach a file to a work item.
+
+        Uses Jira's POST /rest/api/2/issue/{key}/attachments endpoint
+        with multipart/form-data encoding. Returns metadata for the
+        newly created attachment.
+        """
+        if not filename or not filename.strip():
+            raise WorkTrackingError(
+                f"cannot attach file to {key}: filename must not be empty",
+                instance=self._instance_name,
+            )
+        if not content:
+            raise WorkTrackingError(
+                f"cannot attach empty file: {filename}",
+                instance=self._instance_name,
+            )
+
+        try:
+            url = f"{self._server_url}/rest/api/2/issue/{key}/attachments"
+            response = self._client._session.post(
+                url,
+                headers={"X-Atlassian-Token": "no-check"},
+                files={"file": (filename, io.BytesIO(content))},
+            )
+            response.raise_for_status()
+
+            attachments = response.json()
+            if not attachments or not isinstance(attachments, list):
+                raise WorkTrackingError(
+                    f"unexpected response when attaching {filename} to {key}",
+                    instance=self._instance_name,
+                )
+
+            log.debug(
+                "Attached %s to %s (%d bytes)",
+                filename,
+                key,
+                len(content),
+            )
+
+            return normalize_attachment(attachments[0])
         except (ItemNotFound, WorkTrackingError):
             raise
         except Exception as exc:

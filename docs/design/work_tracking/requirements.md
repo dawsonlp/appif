@@ -183,12 +183,32 @@ messaging domain:
 - Platform-specific adapters under `appif.adapters.<platform>/`
 - No platform SDK types in the domain model
 
+### W13: Upload Attachments
+
+The system must attach files to existing work items. The caller provides:
+
+- The work item key
+- The file content (as bytes) and the filename to use on the platform
+
+The system must return the resulting attachment metadata for the newly
+created attachment.
+
+The operation must support the same multi-instance routing as all other
+WorkTracker operations (optional `instance` parameter, default instance
+fallback).
+
+Platform-specific upload mechanics (multipart encoding, CSRF headers, size
+limits) are adapter concerns and must not leak into the domain interface.
+
+> **Added**: 2026-03-29. Promoted from Out of Scope to fulfill RADEMO1
+> requirement D2.5. See `cli03_product_evaluation.md` for rationale.
+
 ## Out of Scope
 
 - Event-driven work item monitoring (watching for ticket changes in
   real-time). This may be added later as a separate concern, potentially
   reusing the existing Connector event pattern.
-- Attachment upload/download (can be added incrementally)
+- Attachment delete/replace/versioning
 - Sprint/iteration management
 - Board/view management
 - User management

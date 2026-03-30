@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-03-29
+
+### Changed
+
+- **Documentation: credential configuration** -- rewrote the Configuration
+  section of the readme to document all three credential supply methods
+  (programmatic, environment variables, config files) with priority order
+  and production guidance. Previously only file-based config was documented.
+
 ## [1.2.0] - 2026-03-29
 
 ### Added
@@ -37,5 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI (lint + test) and release (build + publish to PyPI) workflows
 - GPL-3.0-or-later license
 
+[1.2.1]: https://github.com/dawsonlp/appif/releases/tag/v1.2.1
 [1.2.0]: https://github.com/dawsonlp/appif/releases/tag/v1.2.0
 [1.0.0]: https://github.com/dawsonlp/appif/releases/tag/v1.0.0

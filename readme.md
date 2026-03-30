@@ -144,13 +144,35 @@ pip install appif
 
 ## Configuration
 
-### Messaging (environment variables)
+Every connector and adapter accepts credentials **programmatically** (constructor params or method calls). File-based and environment variable config are convenience layers that provide fallback values when programmatic values are omitted.
 
-Credentials are stored in `~/.env` and loaded at runtime:
+### Credential Priority (all adapters)
 
-```bash
-cp .env.example ~/.env
+1. **Constructor parameters / programmatic registration** -- highest priority, always wins
+2. **Environment variables** -- fallback when constructor params are omitted
+3. **Config files** (YAML, JSON) -- loaded at startup, overridden by either of the above
+
+Production applications should supply credentials from their secrets manager (vault, K8s secrets, AWS SSM, etc.) via constructor params or environment variables. The `~/.env` file is a developer convenience, not a requirement.
+
+### Messaging -- Programmatic + Environment Variables
+
+**Constructor parameters** (recommended for applications):
+
+```python
+from appif.adapters.outlook import OutlookConnector
+
+# All credentials supplied directly -- no env vars or files needed
+connector = OutlookConnector(
+    client_id="your-client-id",
+    client_secret="your-client-secret",
+    tenant_id="your-tenant-id",
+    account="work",
+)
 ```
+
+Gmail and Slack connectors follow the same pattern -- every credential has a constructor parameter.
+
+**Environment variable fallback** (when constructor params are omitted):
 
 | Variable | Service | Required |
 |----------|---------|----------|
@@ -162,11 +184,36 @@ cp .env.example ~/.env
 | `APPIF_SLACK_BOT_OAUTH_TOKEN` | Slack | Yes -- Bot user OAuth token (`xoxb-...`) |
 | `APPIF_SLACK_BOT_APP_LEVEL_TOKEN` | Slack | Yes -- App-level token for Socket Mode (`xapp-...`) |
 
-See [.env.example](.env.example) for the full template with all optional variables.
+If a `~/.env` file exists, `python-dotenv` loads it automatically. Environment variables set by any means (shell, Docker, CI, Kubernetes) work identically. See [.env.example](.env.example) for the full template.
 
-### Work Tracking (YAML config)
+### Work Tracking -- Programmatic + YAML Config
 
-Jira uses a YAML config file at `~/.config/appif/jira/config.yaml`:
+**Programmatic registration** (recommended for applications):
+
+```python
+from appif.domain.work_tracking.service import WorkTrackingService
+
+# Skip file-based config entirely
+service = WorkTrackingService(auto_load=False)
+
+# Register instances with credentials from any source
+service.register(
+    name="production",
+    platform="jira",
+    server_url="https://mycompany.atlassian.net",
+    credentials={
+        "username": "bot@mycompany.com",
+        "api_token": get_secret("jira-api-token"),  # your secrets manager
+    },
+)
+service.set_default("production")
+```
+
+Multiple instances can be registered and selected per-call via the `instance` parameter.
+
+**YAML config fallback** (when `auto_load=True`, the default):
+
+File location: `APPIF_JIRA_CONFIG` env var, or `~/.config/appif/jira/config.yaml`
 
 ```yaml
 instances:
@@ -179,7 +226,7 @@ instances:
 default: personal
 ```
 
-Override the config path with `APPIF_JIRA_CONFIG` env var. Multiple instances supported.
+**Both can be combined**: auto-load from YAML at startup, then programmatically register additional instances.
 
 See [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) for the full setup guide.
 

@@ -9,7 +9,7 @@ Agents need information that lives behind logins: email threads, Slack messages,
 **Two domains are supported:**
 
 - **Messaging** -- Gmail, Outlook, Slack. Unified `MessageEvent` objects via the `Connector` protocol.
-- **Work Tracking** -- Jira. Unified `WorkItem` objects via the `WorkTracker` protocol. Multi-instance support with YAML config.
+- **Work Tracking** -- Jira. Unified `WorkItem` objects via the `WorkTracker` protocol. Multi-instance support with programmatic registration or optional YAML config.
 
 **For the complete usage guide -- the unified model, per-connector mapping tables, code examples, and environment variable reference -- see [docs/usage.md](docs/usage.md).**
 
@@ -42,9 +42,17 @@ All three messaging connectors (Gmail, Outlook, Slack) follow this same pattern.
 from appif.domain.work_tracking.service import WorkTrackingService
 from appif.domain.work_tracking.models import CreateItemRequest, ItemCategory, SearchCriteria
 
-service = WorkTrackingService()  # Loads from ~/.config/appif/jira/config.yaml
+# Supply credentials directly -- no config files needed
+service = WorkTrackingService(auto_load=False)
+service.register(
+    name="myinstance",
+    platform="jira",
+    server_url="https://mycompany.atlassian.net",
+    credentials={"username": "user@example.com", "api_token": "your-token"},
+)
+service.set_default("myinstance")
 
-# Create a ticket using domain-level categories (adapter resolves to platform type)
+# Create a ticket (adapter resolves ItemCategory to platform-specific type)
 item = service.create_item(CreateItemRequest(
     project="MYPROJECT",
     title="Fix login bug",
@@ -53,11 +61,11 @@ item = service.create_item(CreateItemRequest(
 ))
 print(f"Created: {item.key}")
 
-# Attach a file to a ticket
+# Attach a file
 from pathlib import Path
 
 attachment = service.attach_file(
-    "MYPROJECT-42",
+    item.key,
     "requirements.md",
     Path("requirements.md").read_bytes(),
 )
@@ -71,17 +79,9 @@ Path("downloaded.md").write_bytes(content.data)
 results = service.search(SearchCriteria(project="MYPROJECT", status="To Do"))
 for item in results.items:
     print(f"  {item.key}: {item.title}")
-
-# List projects
-for project in service.list_projects():
-    print(f"  {project.key}: {project.name} ({project.project_type})")
-
-# Get project details
-project = service.get_project("MYPROJECT")
-print(f"Lead: {project.lead.display_name if project.lead else 'unassigned'}")
 ```
 
-See [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) for configuration.
+See [Configuration](#configuration) for all credential supply options.
 
 ## Supported Platforms
 
@@ -97,7 +97,7 @@ See [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) for
 
 | Service | Library | Auth Method | Status |
 |---------|---------|-------------|--------|
-| **Jira Cloud** | `atlassian-python-api` | API token (YAML config) | Active |
+| **Jira Cloud** | `atlassian-python-api` | API token (programmatic or YAML config) | Active |
 
 ## CLI
 
@@ -144,24 +144,15 @@ pip install appif
 
 ## Configuration
 
-Every connector and adapter accepts credentials **programmatically** (constructor params or method calls). File-based and environment variable config are convenience layers that provide fallback values when programmatic values are omitted.
+All credentials are supplied **programmatically** -- constructor parameters for messaging connectors, and `register()` calls for work tracking adapters. Your application sources credentials however it needs to (vault, environment variables, secrets manager) and passes them directly. No config files are required.
 
-### Credential Priority (all adapters)
+### Messaging
 
-1. **Constructor parameters / programmatic registration** -- highest priority, always wins
-2. **Environment variables** -- fallback when constructor params are omitted
-3. **Config files** (YAML, JSON) -- loaded at startup, overridden by either of the above
-
-Production applications should supply credentials from their secrets manager (vault, K8s secrets, AWS SSM, etc.) via constructor params or environment variables. The `~/.env` file is a developer convenience, not a requirement.
-
-### Messaging -- Programmatic + Environment Variables
-
-**Constructor parameters** (recommended for applications):
+Every messaging connector accepts credentials as constructor parameters:
 
 ```python
 from appif.adapters.outlook import OutlookConnector
 
-# All credentials supplied directly -- no env vars or files needed
 connector = OutlookConnector(
     client_id="your-client-id",
     client_secret="your-client-secret",
@@ -170,40 +161,23 @@ connector = OutlookConnector(
 )
 ```
 
-Gmail and Slack connectors follow the same pattern -- every credential has a constructor parameter.
+Gmail and Slack connectors follow the same pattern. When a constructor parameter is omitted, the connector falls back to environment variables (`APPIF_GMAIL_CLIENT_ID`, `APPIF_OUTLOOK_CLIENT_ID`, `APPIF_SLACK_BOT_OAUTH_TOKEN`, etc.). See [.env.example](.env.example) for the full list.
 
-**Environment variable fallback** (when constructor params are omitted):
+### Work Tracking
 
-| Variable | Service | Required |
-|----------|---------|----------|
-| `APPIF_GMAIL_CLIENT_ID` | Gmail | Yes -- Google Cloud OAuth client ID |
-| `APPIF_GMAIL_CLIENT_SECRET` | Gmail | Yes -- Google Cloud OAuth client secret |
-| `APPIF_GMAIL_ACCOUNT` | Gmail | Yes -- Account email address |
-| `APPIF_OUTLOOK_CLIENT_ID` | Outlook | Yes -- Azure AD app (client) ID |
-| `APPIF_OUTLOOK_TENANT_ID` | Outlook | Optional -- Azure AD tenant (default: common) |
-| `APPIF_SLACK_BOT_OAUTH_TOKEN` | Slack | Yes -- Bot user OAuth token (`xoxb-...`) |
-| `APPIF_SLACK_BOT_APP_LEVEL_TOKEN` | Slack | Yes -- App-level token for Socket Mode (`xapp-...`) |
-
-If a `~/.env` file exists, `python-dotenv` loads it automatically. Environment variables set by any means (shell, Docker, CI, Kubernetes) work identically. See [.env.example](.env.example) for the full template.
-
-### Work Tracking -- Programmatic + YAML Config
-
-**Programmatic registration** (recommended for applications):
+Register Jira instances programmatically with `auto_load=False`:
 
 ```python
 from appif.domain.work_tracking.service import WorkTrackingService
 
-# Skip file-based config entirely
 service = WorkTrackingService(auto_load=False)
-
-# Register instances with credentials from any source
 service.register(
     name="production",
     platform="jira",
     server_url="https://mycompany.atlassian.net",
     credentials={
         "username": "bot@mycompany.com",
-        "api_token": get_secret("jira-api-token"),  # your secrets manager
+        "api_token": get_secret("jira-api-token"),
     },
 )
 service.set_default("production")
@@ -211,24 +185,7 @@ service.set_default("production")
 
 Multiple instances can be registered and selected per-call via the `instance` parameter.
 
-**YAML config fallback** (when `auto_load=True`, the default):
-
-File location: `APPIF_JIRA_CONFIG` env var, or `~/.config/appif/jira/config.yaml`
-
-```yaml
-instances:
-  personal:
-    jira:
-      url: https://your-domain.atlassian.net
-      username: your-email@example.com
-      api_token: your-api-token
-
-default: personal
-```
-
-**Both can be combined**: auto-load from YAML at startup, then programmatically register additional instances.
-
-See [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) for the full setup guide.
+> **CLI and personal development use only:** When `auto_load=True` (the default), the service reads a YAML file at `~/.config/appif/jira/config.yaml` (or `APPIF_JIRA_CONFIG` env var). This exists solely for the appif CLIs and local development scripts. Applications should use `auto_load=False` and supply credentials programmatically.
 
 ## Project Structure
 
@@ -338,7 +295,7 @@ The Jira adapter uses a similar pattern with `adapter.py` (operations), `_auth.p
 | Gmail | OAuth 2.0 (`python scripts/gmail_consent.py <account>`) | [docs/design/gmail/setup.md](docs/design/gmail/setup.md) |
 | Outlook | OAuth 2.0 (`python scripts/outlook_consent.py <account>`) | [docs/design/outlook/setup.md](docs/design/outlook/setup.md) |
 | Slack | Bot + App tokens from Slack app config | [docs/design/slack/setup.md](docs/design/slack/setup.md) |
-| Jira | API token in YAML config | [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) |
+| Jira | API token (programmatic `register()` or YAML config) | [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) |
 
 ## Documentation
 

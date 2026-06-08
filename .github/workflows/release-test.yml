@@ -1,18 +1,23 @@
 name: Release Step Smoke Test
 
-# Temporary, manually-triggered workflow to verify that
-# softprops/action-gh-release@v3 runs on the Node 24 runtime with the
-# same inputs release.yml uses — WITHOUT publishing to PyPI or creating a
-# public release. Produces a DRAFT release (no git tag, easily deleted).
-# Safe to delete once the upgrade is verified.
+# Temporary workflow to verify that softprops/action-gh-release@v3 runs on
+# the Node 24 runtime with the same inputs release.yml uses — WITHOUT
+# publishing to PyPI or creating a public release.
+#
+# Triggers on tags matching `ghrelease-test-*` (NOT `v*`, so the real
+# release.yml never fires for these). Produces a DRAFT release, which is
+# not public and is easily deleted. Safe to remove once verified.
 
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: Throwaway tag name for the draft release
-        default: v0.0.0-ghrelease-test
+        default: ghrelease-test-manual
         required: true
+  push:
+    tags:
+      - 'ghrelease-test-*'
 
 jobs:
   smoke:
@@ -27,7 +32,7 @@ jobs:
       - name: Create DRAFT GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           name: "[TEST] action-gh-release v3 smoke test"
           body_path: release_notes.md
           draft: true

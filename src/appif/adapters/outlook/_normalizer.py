@@ -17,6 +17,7 @@ from appif.domain.messaging.models import (
     Identity,
     MessageContent,
     MessageEvent,
+    Recipients,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,14 @@ def normalize_message(
         id=sender_email,
         display_name=sender_name,
         connector=_CONNECTOR_NAME,
+        email=sender_email if sender_email != "unknown" else None,
+    )
+
+    # Build recipient set from Graph recipient arrays
+    recipients = Recipients(
+        to=_parse_recipients(msg.get("toRecipients", [])),
+        cc=_parse_recipients(msg.get("ccRecipients", [])),
+        bcc=_parse_recipients(msg.get("bccRecipients", [])),
     )
 
     # Build ConversationRef
@@ -117,8 +126,32 @@ def normalize_message(
             text=text,
             attachments=attachments,
         ),
+        recipients=recipients,
         metadata=metadata,
     )
+
+
+def _parse_recipients(raw: list[dict]) -> list[Identity]:
+    """Convert a Graph recipient array into Identity objects.
+
+    Each entry has the shape ``{"emailAddress": {"name": ..., "address": ...}}``.
+    Entries without an address are skipped.
+    """
+    result: list[Identity] = []
+    for entry in raw or []:
+        email_address = entry.get("emailAddress", {})
+        addr = email_address.get("address", "")
+        if not addr:
+            continue
+        result.append(
+            Identity(
+                id=addr,
+                display_name=email_address.get("name", addr),
+                connector=_CONNECTOR_NAME,
+                email=addr,
+            )
+        )
+    return result
 
 
 def extract_body(msg: dict) -> tuple[str, dict]:

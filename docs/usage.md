@@ -29,10 +29,11 @@ from appif.domain.messaging.models import MessageEvent
 #   author: Identity         -- who sent it
 #   timestamp: datetime      -- when it was sent
 #   content: MessageContent  -- body text + attachments
+#   recipients: Recipients   -- who it was addressed to (to/cc/bcc)
 #   metadata: dict           -- platform-specific extras
 ```
 
-### Identity -- who sent a message
+### Identity -- a person (sender or recipient)
 
 ```python
 from appif.domain.messaging.models import Identity
@@ -41,7 +42,29 @@ from appif.domain.messaging.models import Identity
 #   id: str            -- platform user ID or email address
 #   display_name: str  -- human-readable name
 #   connector: str     -- "gmail", "outlook", or "slack"
+#   email: str | None  -- email address when resolvable (None if unknown)
 ```
+
+For email connectors `email` equals `id` (the address). For Slack it is filled
+from `users.info` when the token carries the `users:read.email` scope, and is
+`None` otherwise.
+
+### Recipients -- who a message was addressed to
+
+```python
+from appif.domain.messaging.models import Recipients
+
+# Fields (each a list[Identity], all default empty):
+#   to:  list[Identity]
+#   cc:  list[Identity]
+#   bcc: list[Identity]
+```
+
+Populated per connector: Outlook from Graph `toRecipients`/`ccRecipients`, Gmail
+from the `To`/`Cc` headers, Slack best-effort from `@`-mentions in the message
+text. `bcc` is normally only present on messages you sent yourself. A connector
+that cannot determine recipients leaves them empty, so the field is always safe
+to read.
 
 ### MessageContent -- what was said
 
@@ -193,6 +216,7 @@ Gmail presents your mailbox as a messaging channel. Each email thread becomes a 
 | Email thread | `ConversationRef` (type: `"email_thread"`) |
 | Individual email | `MessageEvent` |
 | Sender | `Identity` (id = email address) |
+| To / Cc / Bcc | `MessageEvent.recipients` (`to`/`cc`/`bcc` lists of `Identity`) |
 | Email body (plain text) | `MessageContent.text` |
 | Email attachments | `MessageContent.attachments` |
 | Subject, labels, snippet | `MessageEvent.metadata` |
@@ -288,6 +312,7 @@ Outlook presents your Microsoft 365 mailbox through the Graph API. Mail folders 
 | Conversation thread | `ConversationRef` (type: `"email_thread"`) |
 | Individual email | `MessageEvent` |
 | Sender | `Identity` (id = email address) |
+| To / Cc / Bcc | `MessageEvent.recipients` (`to`/`cc`/`bcc` lists of `Identity`) |
 | Email body (plain text) | `MessageContent.text` |
 | Email attachments | `MessageContent.attachments` |
 | Subject, folder, flags | `MessageEvent.metadata` |
@@ -379,7 +404,8 @@ Slack presents your workspace as a real-time messaging channel. Channels, DMs, a
 | Channel, DM, group DM | `Target` (type: `"channel"`, `"dm"`, `"group_dm"`, `"private_channel"`) |
 | Message thread | `ConversationRef` (type varies by conversation) |
 | Message | `MessageEvent` |
-| User | `Identity` (id = Slack user ID, e.g. `U01ABCDEF`) |
+| User | `Identity` (id = Slack user ID, e.g. `U01ABCDEF`; `email` set when `users:read.email` granted) |
+| `@`-mentions in text | `MessageEvent.recipients.to` (best-effort) |
 | Message text | `MessageContent.text` |
 | Files | `MessageContent.attachments` |
 | Reactions, edited flag, app mentions | `MessageEvent.metadata` |

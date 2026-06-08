@@ -114,7 +114,7 @@ Design rules: at-least-once delivery, no return values, no backpressure coupling
 |--------|---------------|
 | `connector.py` | `GmailConnector` — implements `Connector` protocol, orchestrates all other modules |
 | `_auth.py` | `GmailAuth` protocol + `FileCredentialAuth` — loads OAuth tokens from `~/.config/appif/gmail/<account>.json` |
-| `_normalizer.py` | Gmail API message dict → `MessageEvent` — MIME tree walking, HTML stripping, echo suppression, attachment extraction |
+| `_normalizer.py` | Gmail API message dict → `MessageEvent` — MIME tree walking, HTML stripping, echo suppression, attachment extraction, To/Cc/Bcc recipient parsing |
 | `_message_builder.py` | `MessageContent` → base64url-encoded RFC 2822 message — reply threading via `In-Reply-To`/`References` headers, 25MB size limit |
 | `_poller.py` | `GmailPoller` — daemon thread using `history.list` with `startHistoryId` for incremental inbound message detection |
 | `_rate_limiter.py` | `call_with_retry` (tenacity-based) + `map_gmail_error` mapping `HttpError` codes to domain errors |
@@ -167,7 +167,7 @@ Full setup guide: [`docs/design/gmail/setup.md`](docs/design/gmail/setup.md)
 |--------|---------------|
 | `connector.py` | `OutlookConnector` — implements `Connector` protocol, orchestrates all other modules |
 | `_auth.py` | `MsalAuth` + `MsalTokenCredential` — MSAL-based OAuth with file-persisted token cache |
-| `_normalizer.py` | Graph API message dict → `MessageEvent` — HTML→text conversion, echo suppression, attachment composite keys |
+| `_normalizer.py` | Graph API message dict → `MessageEvent` — HTML→text conversion, echo suppression, attachment composite keys, to/cc/bccRecipients parsing |
 | `_message_builder.py` | `MessageContent` → Graph API JSON request body — reply threading, recipient formatting |
 | `_poller.py` | `OutlookPoller` — daemon thread using Graph delta queries for incremental mail detection |
 | `_rate_limiter.py` | `call_with_retry` (tenacity-based) + `map_graph_error` mapping HTTP status codes to domain errors |
@@ -220,7 +220,7 @@ Full setup guide: [`docs/design/outlook/setup.md`](docs/design/outlook/setup.md)
 |--------|---------------|
 | `connector.py` | `SlackConnector` — implements `Connector` protocol using Bolt for Socket Mode |
 | `_auth.py` | `SlackAuth` protocol + `StaticTokenAuth` — bot token and app-level token from environment |
-| `_normalizer.py` | Slack event dict → `MessageEvent` — user resolution, channel mapping, thread handling |
+| `_normalizer.py` | Slack event dict → `MessageEvent` — user resolution, channel mapping, thread handling, @-mention recipient extraction |
 | `_rate_limiter.py` | `call_with_retry` (tenacity-based) + Slack-specific error mapping |
 | `_user_cache.py` | `UserCache` — caches `users.info` lookups to avoid redundant API calls |
 | `__init__.py` | Exports `SlackConnector`, `SlackAuth`, `StaticTokenAuth` |

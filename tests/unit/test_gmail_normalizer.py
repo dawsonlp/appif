@@ -143,6 +143,40 @@ class TestNormalizeMessage:
 
         assert event is None
 
+    def test_author_email_is_from_address(self):
+        msg = _make_message(from_email="alice@example.com")
+        event = normalize_message(msg, "user@gmail.com")
+        assert event.author.email == "alice@example.com"
+
+    def test_recipients_parsed_from_to_and_cc(self):
+        msg = _make_message(to_email="user@gmail.com")
+        msg["payload"]["headers"].extend(
+            [
+                {"name": "Cc", "value": "Carol <carol@example.com>, dave@example.com"},
+            ]
+        )
+        event = normalize_message(msg, "user@gmail.com")
+
+        assert [i.email for i in event.recipients.to] == ["user@gmail.com"]
+        assert [i.email for i in event.recipients.cc] == ["carol@example.com", "dave@example.com"]
+        assert event.recipients.cc[0].display_name == "Carol"
+        assert event.recipients.bcc == []
+
+    def test_recipients_multiple_to(self):
+        msg = _make_message()
+        # Replace the To header with a multi-address list
+        msg["payload"]["headers"] = [h for h in msg["payload"]["headers"] if h["name"] != "To"]
+        msg["payload"]["headers"].append({"name": "To", "value": "a@x.com, b@x.com, c@x.com"})
+        event = normalize_message(msg, "user@gmail.com")
+        assert [i.id for i in event.recipients.to] == ["a@x.com", "b@x.com", "c@x.com"]
+
+    def test_recipients_empty_when_no_headers(self):
+        msg = _make_message()
+        msg["payload"]["headers"] = [h for h in msg["payload"]["headers"] if h["name"] not in ("To", "Cc")]
+        event = normalize_message(msg, "user@gmail.com")
+        assert event.recipients.to == []
+        assert event.recipients.cc == []
+
     def test_conversation_ref_contains_threading_data(self):
         msg = _make_message()
         event = normalize_message(msg, "user@gmail.com")

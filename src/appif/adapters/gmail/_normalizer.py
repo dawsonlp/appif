@@ -19,6 +19,7 @@ from appif.domain.messaging.models import (
     Identity,
     MessageContent,
     MessageEvent,
+    Recipients,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,14 @@ def normalize_message(message: dict, account_id: str, *, include_sent: bool = Fa
         id=from_email,
         display_name=display_name,
         connector=_CONNECTOR_NAME,
+        email=from_email or None,
+    )
+
+    # ── Recipients ────────────────────────────────────────────
+    recipients = Recipients(
+        to=_parse_recipients(headers.get("to", "")),
+        cc=_parse_recipients(headers.get("cc", "")),
+        bcc=_parse_recipients(headers.get("bcc", "")),
     )
 
     # ── Timestamp ─────────────────────────────────────────────
@@ -123,8 +132,30 @@ def normalize_message(message: dict, account_id: str, *, include_sent: bool = Fa
             text=text,
             attachments=attachments,
         ),
+        recipients=recipients,
         metadata=metadata,
     )
+
+
+def _parse_recipients(header_value: str) -> list[Identity]:
+    """Parse an address-list header (``To``/``Cc``/``Bcc``) into Identities.
+
+    Handles comma-separated lists and ``"Name" <addr@host>`` forms via
+    :func:`email.utils.getaddresses`. Entries without an address are skipped.
+    """
+    result: list[Identity] = []
+    for name, addr in email.utils.getaddresses([header_value]):
+        if not addr:
+            continue
+        result.append(
+            Identity(
+                id=addr,
+                display_name=name or addr.split("@")[0],
+                connector=_CONNECTOR_NAME,
+                email=addr,
+            )
+        )
+    return result
 
 
 def extract_body(payload: dict) -> str:

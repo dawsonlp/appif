@@ -161,6 +161,49 @@ class TestSelfMessageFiltering:
         assert msg.author.id == _AUTH_UID
 
 
+class TestRecipients:
+    """Best-effort recipients derived from @-mentions."""
+
+    def _resolve_with_email(self, user_id: str) -> Identity:
+        return Identity(id=user_id, display_name=f"display-{user_id}", connector="slack", email=f"{user_id}@x.com")
+
+    def test_no_mentions_gives_empty_recipients(self):
+        msg = normalize_message(
+            _base_event(text="just a plain message"),
+            team_id=_TEAM_ID,
+            authenticated_user_id=_AUTH_UID,
+            resolve_user=_fake_resolve,
+        )
+        assert msg.recipients.to == []
+
+    def test_mentions_become_recipients(self):
+        msg = normalize_message(
+            _base_event(text="hey <@U111> and <@U222|bob>, ping"),
+            team_id=_TEAM_ID,
+            authenticated_user_id=_AUTH_UID,
+            resolve_user=_fake_resolve,
+        )
+        assert [i.id for i in msg.recipients.to] == ["U111", "U222"]
+
+    def test_mentions_deduped_preserving_order(self):
+        msg = normalize_message(
+            _base_event(text="<@U222> <@U111> <@U222> again"),
+            team_id=_TEAM_ID,
+            authenticated_user_id=_AUTH_UID,
+            resolve_user=_fake_resolve,
+        )
+        assert [i.id for i in msg.recipients.to] == ["U222", "U111"]
+
+    def test_mention_identities_carry_email(self):
+        msg = normalize_message(
+            _base_event(text="<@U111>"),
+            team_id=_TEAM_ID,
+            authenticated_user_id=_AUTH_UID,
+            resolve_user=self._resolve_with_email,
+        )
+        assert msg.recipients.to[0].email == "U111@x.com"
+
+
 class TestThreading:
     """Conversation ref type and thread_ts handling."""
 

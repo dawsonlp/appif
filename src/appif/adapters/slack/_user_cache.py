@@ -48,16 +48,22 @@ class UserCache:
         response = call_with_retry(self._client.users_info, user=user_id)
         user_data = response.data.get("user", {})
 
+        profile = user_data.get("profile", {})
         display_name = (
-            user_data.get("profile", {}).get("display_name")
-            or user_data.get("profile", {}).get("real_name")
+            profile.get("display_name")
+            or profile.get("real_name")
             or user_data.get("real_name")
             or user_data.get("name")
             or user_id
         )
 
+        # Email is only present when the token carries the users:read.email
+        # scope; otherwise it is absent and Identity.email stays None.
+        email = profile.get("email") or None
+
         return Identity(
             id=user_id,
             display_name=display_name,
             connector="slack",
+            email=email,
         )

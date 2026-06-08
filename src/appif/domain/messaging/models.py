@@ -19,11 +19,40 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Identity:
-    """A message author resolved by a connector."""
+    """A message author or recipient resolved by a connector.
+
+    ``email`` is populated when the connector can resolve it. For email
+    connectors it equals ``id`` (the address); for Slack it is filled from
+    ``users.info`` when the token carries the ``users:read.email`` scope,
+    otherwise ``None``.
+    """
 
     id: str
     display_name: str
     connector: str
+    email: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Recipients
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Recipients:
+    """The addressed recipients of a message, by role.
+
+    Each list holds resolved :class:`Identity` objects. All default to
+    empty, so the field is backward-compatible across every connector: a
+    connector that cannot determine recipients simply leaves them empty.
+
+    ``bcc`` is normally only populated on messages you sent yourself —
+    inbound mail does not expose other recipients' blind-copy list.
+    """
+
+    to: list[Identity] = field(default_factory=list)
+    cc: list[Identity] = field(default_factory=list)
+    bcc: list[Identity] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +127,7 @@ class MessageEvent:
     author: Identity
     timestamp: datetime
     content: MessageContent
+    recipients: Recipients = field(default_factory=Recipients)
     metadata: dict = field(default_factory=dict)
 
 

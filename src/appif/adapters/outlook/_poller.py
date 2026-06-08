@@ -122,8 +122,8 @@ class OutlookPoller:
             # Initial delta request
             url = (
                 f"{_GRAPH_BASE}/me/mailFolders/{folder}/messages/delta"
-                "?$select=id,from,subject,body,conversationId,receivedDateTime,"
-                "parentFolderId,hasAttachments,attachments"
+                "?$select=id,from,toRecipients,ccRecipients,bccRecipients,subject,body,"
+                "conversationId,receivedDateTime,parentFolderId,hasAttachments,attachments"
             )
 
         messages = []

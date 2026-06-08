@@ -8,6 +8,7 @@ or a user.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -16,7 +17,12 @@ from appif.domain.messaging.models import (
     Identity,
     MessageContent,
     MessageEvent,
+    Recipients,
 )
+
+# Slack encodes user mentions as ``<@U012ABC>`` or ``<@U012ABC|name>``.
+# (``W`` prefixes occur for Enterprise Grid org users.)
+_MENTION_RE = re.compile(r"<@([UW][A-Z0-9]+)(?:\|[^>]+)?>")
 
 # Type alias for the user-resolve callback injected by the connector.
 # Returns an Identity object (matches UserCache.resolve signature).
@@ -74,6 +80,18 @@ def normalize_message(
 
     timestamp = datetime.fromtimestamp(float(ts), tz=UTC) if ts else datetime.now(tz=UTC)
 
+    # Best-effort recipients: Slack has no addressed "to" list, so we treat
+    # @-mentions in the message text as the involved set (deduped, in order).
+    text = event.get("text", "")
+    seen: set[str] = set()
+    mentioned: list[Identity] = []
+    for mention_id in _MENTION_RE.findall(text):
+        if mention_id in seen:
+            continue
+        seen.add(mention_id)
+        mentioned.append(resolve_user(mention_id))
+    recipients = Recipients(to=mentioned)
+
     conversation_ref = ConversationRef(
         connector="slack",
         account_id=team_id,
@@ -91,6 +109,7 @@ def normalize_message(
         conversation_ref=conversation_ref,
         author=identity,
         timestamp=timestamp,
-        content=MessageContent(text=event.get("text", "")),
+        content=MessageContent(text=text),
+        recipients=recipients,
         metadata=event,
     )

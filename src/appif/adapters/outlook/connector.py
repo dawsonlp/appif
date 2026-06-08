@@ -329,7 +329,10 @@ class OutlookConnector:
             filters.append(f"receivedDateTime le {scope.latest.isoformat()}")
 
         params: dict = {
-            "$select": "id,from,subject,body,conversationId,receivedDateTime,parentFolderId,hasAttachments,attachments",
+            "$select": (
+                "id,from,toRecipients,ccRecipients,bccRecipients,subject,body,"
+                "conversationId,receivedDateTime,parentFolderId,hasAttachments,attachments"
+            ),
             "$orderby": "receivedDateTime desc",
             "$top": "50",
         }

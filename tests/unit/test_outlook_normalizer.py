@@ -63,6 +63,35 @@ class TestNormalizeMessage:
         assert event is not None
         assert event.message_id == "AAMkAGI2TG93AAA="
 
+    def test_author_email_set(self):
+        event = normalize_message(_make_graph_message(), account_id="test")
+        assert event.author.email == "alice@example.com"
+
+    def test_recipients_parsed(self):
+        msg = _make_graph_message(
+            toRecipients=[
+                {"emailAddress": {"name": "Bob", "address": "bob@example.com"}},
+                {"emailAddress": {"name": "Me", "address": "me@example.com"}},
+            ],
+            ccRecipients=[{"emailAddress": {"address": "carol@example.com"}}],
+        )
+        event = normalize_message(msg, account_id="test")
+
+        assert [i.email for i in event.recipients.to] == ["bob@example.com", "me@example.com"]
+        assert event.recipients.to[0].display_name == "Bob"
+        assert [i.email for i in event.recipients.cc] == ["carol@example.com"]
+        assert event.recipients.bcc == []
+
+    def test_recipients_empty_when_absent(self):
+        event = normalize_message(_make_graph_message(), account_id="test")
+        assert event.recipients.to == []
+        assert event.recipients.cc == []
+
+    def test_recipient_without_address_skipped(self):
+        msg = _make_graph_message(toRecipients=[{"emailAddress": {"name": "No Addr"}}])
+        event = normalize_message(msg, account_id="test")
+        assert event.recipients.to == []
+
     def test_empty_id_returns_none(self):
         """Message without id returns None."""
         msg = _make_graph_message(id="")

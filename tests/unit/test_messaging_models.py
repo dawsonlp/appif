@@ -1,5 +1,6 @@
 """Unit tests for messaging domain models."""
 
+import dataclasses
 from datetime import UTC, datetime
 
 from appif.domain.messaging.models import (
@@ -11,6 +12,7 @@ from appif.domain.messaging.models import (
     Identity,
     MessageContent,
     MessageEvent,
+    Recipients,
     SendReceipt,
     Target,
 )
@@ -40,6 +42,43 @@ class TestIdentity:
         a = Identity(id="U123", display_name="Alice", connector="slack")
         b = Identity(id="U456", display_name="Bob", connector="slack")
         assert a != b
+
+    def test_email_defaults_none(self):
+        identity = Identity(id="U123", display_name="Alice", connector="slack")
+        assert identity.email is None
+
+    def test_email_set(self):
+        identity = Identity(id="U123", display_name="Alice", connector="slack", email="a@x.com")
+        assert identity.email == "a@x.com"
+
+
+class TestRecipients:
+    def test_defaults_empty(self):
+        r = Recipients()
+        assert r.to == []
+        assert r.cc == []
+        assert r.bcc == []
+
+    def test_defaults_not_shared(self):
+        a = Recipients()
+        b = Recipients()
+        assert a.to is not b.to
+
+    def test_frozen(self):
+        r = Recipients()
+        try:
+            r.to = [Identity(id="x", display_name="x", connector="gmail")]
+            assert False, "Should not allow mutation"
+        except AttributeError:
+            pass
+
+    def test_roles(self):
+        to = [Identity(id="b@x.com", display_name="Bob", connector="gmail", email="b@x.com")]
+        cc = [Identity(id="c@x.com", display_name="Carol", connector="gmail", email="c@x.com")]
+        r = Recipients(to=to, cc=cc)
+        assert r.to == to
+        assert r.cc == cc
+        assert r.bcc == []
 
 
 class TestMessageContent:
@@ -138,6 +177,34 @@ class TestMessageEvent:
         a = self._make_event()
         b = self._make_event()
         assert a == b
+
+    def test_recipients_default_empty(self):
+        event = self._make_event()
+        assert event.recipients == Recipients()
+        assert event.recipients.to == []
+
+    def test_recipients_default_not_shared(self):
+        a = self._make_event()
+        b = self._make_event()
+        assert a.recipients is not b.recipients
+
+    def test_with_recipients(self):
+        bob = Identity(id="b@x.com", display_name="Bob", connector="gmail", email="b@x.com")
+        event = self._make_event(recipients=Recipients(to=[bob]))
+        assert event.recipients.to == [bob]
+
+    def test_asdict_carries_recipients_onto_envelope(self):
+        # Downstream serializes via dataclasses.asdict; the new field must
+        # ride onto the payload automatically with no envelope-contract change.
+        bob = Identity(id="b@x.com", display_name="Bob", connector="gmail", email="b@x.com")
+        event = self._make_event(recipients=Recipients(to=[bob]))
+        payload = dataclasses.asdict(event)
+        assert "recipients" in payload
+        assert payload["recipients"]["to"] == [
+            {"id": "b@x.com", "display_name": "Bob", "connector": "gmail", "email": "b@x.com"}
+        ]
+        assert payload["recipients"]["cc"] == []
+        assert "email" in payload["author"]
 
 
 class TestSendReceipt:

@@ -21,6 +21,7 @@ from appif.domain.messaging.models import (
     Identity,
     MessageContent,
     MessageEvent,
+    Recipients,
     SendReceipt,
     Target,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "Identity",
     "MessageContent",
     "MessageEvent",
+    "Recipients",
     "SendReceipt",
     "Target",
     # Errors

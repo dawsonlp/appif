@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-06-08
+
+### Added
+
+- **Messaging: message recipients** (`MessageEvent.recipients`) -- every
+  message now carries a `Recipients` value object with `to`/`cc`/`bcc` lists
+  of `Identity`, exposing the involved set beyond the sender. Populated per
+  connector: Outlook from Graph `toRecipients`/`ccRecipients`/`bccRecipients`
+  (the delta and backfill `$select` were widened accordingly), Gmail from the
+  `To`/`Cc`/`Bcc` headers, Slack best-effort from `@`-mentions. Defaults empty,
+  so the field is backward-compatible and rides onto downstream
+  `dataclasses.asdict` envelopes with no contract change.
+- **Identity email** (`Identity.email`) -- optional email address on every
+  resolved identity (sender and recipients). Equals `id` for email connectors;
+  filled from `users.info` for Slack when the token carries `users:read.email`,
+  otherwise `None`.
+
 ## [1.3.0] - 2026-06-08
 
 ### Added

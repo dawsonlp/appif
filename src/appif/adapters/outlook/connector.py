@@ -39,6 +39,14 @@ _CONNECTOR_NAME = "outlook"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 class OutlookConnector:
     """Microsoft 365 mail adapter implementing the ``Connector`` protocol.
 
@@ -60,6 +68,11 @@ class OutlookConnector:
         Well-known folder names to poll (default: ``["Inbox"]``).
     delivery_mode:
         ``"poll"`` for v1. Future: ``"subscription"``.
+    include_sent:
+        When ``True``, messages you sent are delivered to listeners
+        alongside incoming mail (echo suppression is disabled and the
+        ``SentItems`` folder is added to the watch set so sent mail is
+        polled). Defaults to ``APPIF_OUTLOOK_INCLUDE_SENT`` env var or ``False``.
     """
 
     def __init__(
@@ -73,6 +86,7 @@ class OutlookConnector:
         poll_interval: int | None = None,
         folder_filter: list[str] | None = None,
         delivery_mode: str | None = None,
+        include_sent: bool | None = None,
     ) -> None:
         # Resolve from env with parameter overrides
         self._client_id = client_id or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
@@ -85,6 +99,7 @@ class OutlookConnector:
         )
         self._poll_interval = poll_interval or int(os.environ.get("APPIF_OUTLOOK_POLL_INTERVAL_SECONDS", "30"))
         self._delivery_mode = delivery_mode or os.environ.get("APPIF_OUTLOOK_DELIVERY_MODE", "poll")
+        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_OUTLOOK_INCLUDE_SENT")
 
         # Parse folder filter
         if folder_filter is not None:
@@ -92,6 +107,11 @@ class OutlookConnector:
         else:
             raw = os.environ.get("APPIF_OUTLOOK_FOLDER_FILTER", "Inbox")
             self._folders = [f.strip() for f in raw.split(",") if f.strip()]
+
+        # Sent mail lives in the SentItems folder — ensure it is polled when
+        # the caller wants their own sent messages surfaced.
+        if self._include_sent and "SentItems" not in self._folders:
+            self._folders.append("SentItems")
 
         # Internal state
         self._status = ConnectorStatus.DISCONNECTED
@@ -146,6 +166,7 @@ class OutlookConnector:
                 poll_interval=self._poll_interval,
                 callback=self._on_message,
                 sent_ids=self._sent_ids,
+                include_sent=self._include_sent,
             )
             self._poller.start()
 
@@ -380,6 +401,7 @@ class OutlookConnector:
                     msg,
                     account_id=self._account,
                     sent_ids=self._sent_ids,
+                    include_sent=self._include_sent,
                 )
                 if event is not None:
                     self._on_message(event)

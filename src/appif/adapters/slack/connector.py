@@ -13,6 +13,7 @@ event delivery; without it the connector works in API-only mode.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +47,14 @@ logger = logging.getLogger(__name__)
 _CONNECTOR_NAME = "slack"
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 class SlackConnector:
     """Adapter that bridges Slack to the domain messaging port.
 
@@ -62,13 +71,24 @@ class SlackConnector:
         Optional app-level token (``xapp-``). Enables Socket Mode for
         real-time event delivery. When ``None`` the connector operates
         in API-only mode (``supports_realtime=False``).
+    include_sent:
+        When ``True``, messages you sent are delivered to listeners
+        alongside incoming messages (self-message filtering is disabled).
+        Defaults to ``APPIF_SLACK_INCLUDE_SENT`` env var or ``False``.
     """
 
     # -- construction ---------------------------------------------------------
 
-    def __init__(self, *, identity_token: str, app_token: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        identity_token: str,
+        app_token: str | None = None,
+        include_sent: bool | None = None,
+    ) -> None:
         self._auth = StaticTokenAuth(identity_token=identity_token, app_token=app_token)
         self._auth.validate()
+        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_SLACK_INCLUDE_SENT")
 
         self._status = ConnectorStatus.DISCONNECTED
         self._listeners: list[MessageListener] = []
@@ -325,6 +345,7 @@ class SlackConnector:
             team_id=self._team_id or "",
             authenticated_user_id=self._authenticated_user_id or "",
             resolve_user=self._user_cache.resolve,
+            include_sent=self._include_sent,
         )
         if message_event is not None:
             self._dispatch_event(message_event)
@@ -372,6 +393,7 @@ class SlackConnector:
                     team_id=self._team_id or "",
                     authenticated_user_id=self._authenticated_user_id or "",
                     resolve_user=self._user_cache.resolve,
+                    include_sent=self._include_sent,
                 )
                 if event is not None:
                     self._dispatch_event(event)

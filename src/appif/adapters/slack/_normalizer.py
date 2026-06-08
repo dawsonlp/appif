@@ -29,6 +29,7 @@ def normalize_message(
     team_id: str,
     authenticated_user_id: str,
     resolve_user: ResolveUser,
+    include_sent: bool = False,
 ) -> MessageEvent | None:
     """Turn a Slack ``message`` event into a domain :class:`MessageEvent`.
 
@@ -47,11 +48,14 @@ def normalize_message(
     resolve_user:
         Sync callback ``(user_id) -> Identity`` supplied by the
         connector (usually backed by :class:`UserCache`).
+    include_sent:
+        When ``True``, messages from the authenticated identity are emitted
+        instead of filtered — used to surface your own sent messages.
     """
     user_id: str = event.get("user", "")
 
     # Skip messages from the authenticated identity
-    if user_id and user_id == authenticated_user_id:
+    if not include_sent and user_id and user_id == authenticated_user_id:
         return None
 
     identity = (

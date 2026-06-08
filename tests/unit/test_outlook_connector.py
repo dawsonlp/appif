@@ -74,6 +74,42 @@ class TestConnectorLifecycle:
         connector.disconnect()  # Should not raise
 
 
+class TestConnectorIncludeSent:
+    """Tests for the include_sent configuration flag."""
+
+    def test_default_excludes_sent(self):
+        from appif.adapters.outlook.connector import OutlookConnector
+
+        connector = OutlookConnector(client_id="test", credentials_dir="/tmp/test")
+        assert connector._include_sent is False
+        assert "SentItems" not in connector._folders
+
+    def test_include_sent_adds_sentitems_folder(self):
+        from appif.adapters.outlook.connector import OutlookConnector
+
+        connector = OutlookConnector(client_id="test", credentials_dir="/tmp/test", include_sent=True)
+        assert connector._include_sent is True
+        assert "SentItems" in connector._folders
+
+    def test_include_sent_does_not_duplicate_folder(self):
+        from appif.adapters.outlook.connector import OutlookConnector
+
+        connector = OutlookConnector(
+            client_id="test",
+            credentials_dir="/tmp/test",
+            include_sent=True,
+            folder_filter=["Inbox", "SentItems"],
+        )
+        assert connector._folders.count("SentItems") == 1
+
+    def test_include_sent_from_env(self, monkeypatch):
+        from appif.adapters.outlook.connector import OutlookConnector
+
+        monkeypatch.setenv("APPIF_OUTLOOK_INCLUDE_SENT", "1")
+        connector = OutlookConnector(client_id="test", credentials_dir="/tmp/test")
+        assert connector._include_sent is True
+
+
 class TestConnectorCapabilities:
     """Tests for get_capabilities."""
 

@@ -123,6 +123,44 @@ class TestGmailConnectorLifecycle:
         assert auth.validate.call_count == 1
 
 
+class TestGmailConnectorIncludeSent:
+    """Tests for the include_sent configuration flag."""
+
+    def test_default_excludes_sent(self):
+        from appif.adapters.gmail.connector import GmailConnector
+
+        connector = GmailConnector(auth=_make_mock_auth())
+        assert connector._include_sent is False
+        assert "SENT" not in connector._label_filter
+
+    def test_include_sent_adds_sent_label(self):
+        from appif.adapters.gmail.connector import GmailConnector
+
+        connector = GmailConnector(auth=_make_mock_auth(), include_sent=True)
+        assert connector._include_sent is True
+        assert "SENT" in connector._label_filter
+
+    def test_include_sent_does_not_duplicate_sent_label(self):
+        from appif.adapters.gmail.connector import GmailConnector
+
+        connector = GmailConnector(auth=_make_mock_auth(), include_sent=True, label_filter=["INBOX", "SENT"])
+        assert connector._label_filter.count("SENT") == 1
+
+    def test_include_sent_from_env(self, monkeypatch):
+        from appif.adapters.gmail.connector import GmailConnector
+
+        monkeypatch.setenv("APPIF_GMAIL_INCLUDE_SENT", "true")
+        connector = GmailConnector(auth=_make_mock_auth())
+        assert connector._include_sent is True
+
+    def test_explicit_param_overrides_env(self, monkeypatch):
+        from appif.adapters.gmail.connector import GmailConnector
+
+        monkeypatch.setenv("APPIF_GMAIL_INCLUDE_SENT", "true")
+        connector = GmailConnector(auth=_make_mock_auth(), include_sent=False)
+        assert connector._include_sent is False
+
+
 class TestGmailConnectorDiscovery:
     """Tests for list_accounts and list_targets."""
 

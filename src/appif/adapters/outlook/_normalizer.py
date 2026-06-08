@@ -29,6 +29,7 @@ def normalize_message(
     *,
     account_id: str,
     sent_ids: set[str] | None = None,
+    include_sent: bool = False,
 ) -> MessageEvent | None:
     """Convert a Graph API message dict into a ``MessageEvent``.
 
@@ -40,6 +41,9 @@ def normalize_message(
         Logical account label for this connector instance.
     sent_ids:
         Set of message IDs that were sent by this connector (echo suppression).
+    include_sent:
+        When ``True``, messages you sent are normalised and emitted instead
+        of being suppressed — used to surface your own sent mail.
 
     Returns
     -------
@@ -51,7 +55,7 @@ def normalize_message(
         return None
 
     # Echo suppression — skip messages we sent ourselves
-    if sent_ids and msg_id in sent_ids:
+    if not include_sent and sent_ids and msg_id in sent_ids:
         logger.debug("outlook.echo_suppressed", extra={"message_id": msg_id})
         return None
 

@@ -122,6 +122,20 @@ class TestNormalizeMessage:
 
         assert event is None
 
+    def test_include_sent_emits_own_message(self):
+        msg = _make_message(from_email="user@gmail.com", from_name="Me", label_ids=["SENT"])
+        event = normalize_message(msg, "user@gmail.com", include_sent=True)
+
+        assert isinstance(event, MessageEvent)
+        assert event.author.id == "user@gmail.com"
+
+    def test_include_sent_still_filters_empty_id(self):
+        msg = _make_message(from_email="user@gmail.com")
+        msg["id"] = ""
+        event = normalize_message(msg, "user@gmail.com", include_sent=True)
+
+        assert event is None
+
     def test_empty_message_id_returns_none(self):
         msg = _make_message()
         msg["id"] = ""

@@ -126,7 +126,7 @@ Design rules: at-least-once delivery, no return values, no backpressure coupling
 - **Send**: New threads and reply-to-thread (subject routing via `ConversationRef.opaque_id`)
 - **Backfill**: Fetches messages from a mailbox with date range and count limits
 - **Attachments**: Resolved lazily via `attachment_resolver` callback (content fetched from Gmail API on demand)
-- **Echo suppression**: Normalizer filters out messages sent by the connected account
+- **Echo suppression**: Normalizer filters out messages sent by the connected account (disable with `include_sent=True` / `APPIF_GMAIL_INCLUDE_SENT` to surface your own sent mail; adds the `SENT` label to the watch set)
 - **Subject routing**: Uses email subject as `ConversationRef.opaque_id` for thread correlation
 
 ### Credential Setup
@@ -179,7 +179,7 @@ Full setup guide: [`docs/design/gmail/setup.md`](docs/design/gmail/setup.md)
 - **Send**: New threads and reply-to-thread via Graph API
 - **Backfill**: Fetches messages using Graph API list endpoint with date filters
 - **Attachments**: Send and receive with composite key references
-- **Echo suppression**: Normalizer filters messages sent by the connected account
+- **Echo suppression**: Normalizer filters messages sent by the connected account (disable with `include_sent=True` / `APPIF_OUTLOOK_INCLUDE_SENT` to surface your own sent mail; adds the `SentItems` folder to the watch set)
 - **Threading**: Uses Graph API `conversationId` for thread correlation
 
 ### Credential Setup
@@ -234,6 +234,7 @@ Full setup guide: [`docs/design/outlook/setup.md`](docs/design/outlook/setup.md)
 - **Reactions**: ✅ Supported
 - **Editing**: ✅ Supported
 - **User resolution**: Cached `users.info` lookups for display name and email
+- **Self-message filtering**: Normalizer drops messages from the authenticated identity (disable with `include_sent=True` / `APPIF_SLACK_INCLUDE_SENT` to surface your own messages)
 
 ### Credential Setup
 

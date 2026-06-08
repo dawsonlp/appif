@@ -259,6 +259,7 @@ connector.disconnect()
 - **Delivery mode**: `AUTOMATIC` (sends immediately) or `ASSISTED` (creates draft). Set via `APPIF_GMAIL_DELIVERY_MODE` env var.
 - **Polling**: Uses Gmail `history.list` API. Poll interval configurable via `APPIF_GMAIL_POLL_INTERVAL_SECONDS` (default: 30).
 - **Label filtering**: Only watches specified labels. Set via `APPIF_GMAIL_LABEL_FILTER` (default: `INBOX`).
+- **Reading sent mail**: By default messages you sent are suppressed. Set `include_sent=True` (or `APPIF_GMAIL_INCLUDE_SENT=true`) to deliver them to listeners alongside incoming mail. The `SENT` label is added to the watch set automatically when enabled. **Caution:** if a listener replies to messages it receives, enabling this can create an echo loop (your reply comes back as a sent message); make such listeners idempotent or filter on `event.author`.
 - **HTML stripping**: Email HTML is converted to plain text automatically.
 - **Thread handling**: Replies preserve the email thread using Gmail's `threadId`.
 - **Attachment download**: Large attachments arrive with `content_ref` only. Use `connector.resolve_attachment(content_ref)` to download bytes.
@@ -350,6 +351,7 @@ connector.disconnect()
 - **Delivery mode**: `AUTOMATIC` (sends immediately). Draft mode not yet supported.
 - **Polling**: Uses Graph API delta queries. Poll interval configurable via `APPIF_OUTLOOK_POLL_INTERVAL_SECONDS` (default: 30).
 - **Folder filtering**: Only watches specified folders. Set via `APPIF_OUTLOOK_FOLDER_FILTER` (default: `Inbox`).
+- **Reading sent mail**: By default messages you sent are suppressed. Set `include_sent=True` (or `APPIF_OUTLOOK_INCLUDE_SENT=true`) to deliver them to listeners alongside incoming mail. The `SentItems` folder is added to the watch set automatically when enabled. **Caution:** if a listener replies to messages it receives, enabling this can create an echo loop; make such listeners idempotent or filter on `event.author`.
 - **HTML stripping**: Email HTML is converted to plain text automatically.
 - **Thread handling**: Replies use Graph API's message reply endpoint, preserving the conversation thread.
 - **Authentication**: MSAL-based with persisted token cache. Supports both public (device code) and confidential (client secret) flows.
@@ -433,6 +435,7 @@ connector.disconnect()
 
 - **Real-time delivery**: Uses Slack Socket Mode for instant message delivery (no polling delay).
 - **User resolution**: The connector automatically resolves Slack user IDs to display names via a built-in user cache.
+- **Reading your own messages**: By default messages from the authenticated identity are filtered out. Set `include_sent=True` (or `APPIF_SLACK_INCLUDE_SENT=true`) to deliver them to listeners alongside other messages. **Caution:** if a listener replies to messages it receives, enabling this can create an echo loop; make such listeners idempotent or filter on `event.author`.
 - **Thread support**: Thread replies are fully supported. `ConversationRef.opaque_id` carries the thread timestamp.
 - **Channel types**: The connector distinguishes channels, DMs, group DMs, and private channels via `Target.type`.
 - **No consent flow needed**: Authentication uses bot and app-level tokens directly from Slack app configuration.
@@ -527,6 +530,7 @@ slack.disconnect()
 | `APPIF_GMAIL_CREDENTIALS_DIR` | `~/.config/appif/gmail` | Token storage directory |
 | `APPIF_GMAIL_POLL_INTERVAL_SECONDS` | `30` | Seconds between poll cycles |
 | `APPIF_GMAIL_LABEL_FILTER` | `INBOX` | Comma-separated label IDs to watch |
+| `APPIF_GMAIL_INCLUDE_SENT` | `false` | Deliver your own sent mail to listeners (adds `SENT` to watched labels) |
 | `APPIF_GMAIL_DELIVERY_MODE` | `AUTOMATIC` | `AUTOMATIC` (send) or `ASSISTED` (draft) |
 
 ### Outlook
@@ -540,6 +544,7 @@ slack.disconnect()
 | `APPIF_OUTLOOK_CREDENTIALS_DIR` | `~/.config/appif/outlook` | MSAL token cache directory |
 | `APPIF_OUTLOOK_POLL_INTERVAL_SECONDS` | `30` | Seconds between delta-query cycles |
 | `APPIF_OUTLOOK_FOLDER_FILTER` | `Inbox` | Comma-separated folder names to watch |
+| `APPIF_OUTLOOK_INCLUDE_SENT` | `false` | Deliver your own sent mail to listeners (adds `SentItems` to watched folders) |
 | `APPIF_OUTLOOK_DELIVERY_MODE` | `poll` | Delivery mode |
 
 ### Slack
@@ -549,3 +554,4 @@ slack.disconnect()
 | `APPIF_SLACK_BOT_OAUTH_TOKEN` | (required) | Bot user OAuth token (`xoxb-...`) |
 | `APPIF_SLACK_USER_OAUTH_TOKEN` | (optional) | User OAuth token (`xoxp-...`) -- for connecting as yourself |
 | `APPIF_SLACK_BOT_APP_LEVEL_TOKEN` | (optional) | App-level token for Socket Mode (`xapp-...`) -- enables real-time events |
+| `APPIF_SLACK_INCLUDE_SENT` | `false` | Deliver your own messages to listeners instead of filtering them |

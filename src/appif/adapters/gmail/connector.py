@@ -42,6 +42,14 @@ logger = logging.getLogger(__name__)
 _CONNECTOR_NAME = "gmail"
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 class GmailConnector:
     """Gmail adapter implementing the ``Connector`` protocol.
 
@@ -58,6 +66,11 @@ class GmailConnector:
     label_filter:
         Label IDs to watch. Defaults to ``APPIF_GMAIL_LABEL_FILTER``
         env var (comma-separated) or ``["INBOX"]``.
+    include_sent:
+        When ``True``, messages you sent are delivered to listeners
+        alongside incoming mail (echo suppression is disabled and the
+        ``SENT`` label is added to the watch set so sent mail is polled).
+        Defaults to ``APPIF_GMAIL_INCLUDE_SENT`` env var or ``False``.
     """
 
     def __init__(
@@ -67,16 +80,23 @@ class GmailConnector:
         delivery_mode: str | None = None,
         poll_interval: int | None = None,
         label_filter: list[str] | None = None,
+        include_sent: bool | None = None,
     ) -> None:
         self._auth = auth or FileCredentialAuth()
         self._delivery_mode = (delivery_mode or os.environ.get("APPIF_GMAIL_DELIVERY_MODE", "AUTOMATIC")).upper()
         self._poll_interval = poll_interval or int(os.environ.get("APPIF_GMAIL_POLL_INTERVAL_SECONDS", "30"))
+        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_GMAIL_INCLUDE_SENT")
 
         if label_filter is not None:
             self._label_filter = label_filter
         else:
             raw = os.environ.get("APPIF_GMAIL_LABEL_FILTER", "INBOX")
             self._label_filter = [lbl.strip() for lbl in raw.split(",") if lbl.strip()]
+
+        # Sent mail lives under the SENT label — ensure it is polled when
+        # the caller wants their own sent messages surfaced.
+        if self._include_sent and "SENT" not in self._label_filter:
+            self._label_filter.append("SENT")
 
         # Internal state
         self._status = ConnectorStatus.DISCONNECTED
@@ -259,7 +279,7 @@ class GmailConnector:
                 full_msg = call_with_retry(
                     self._service.users().messages().get(userId="me", id=msg_id, format="full").execute
                 )
-                event = normalize_message(full_msg, self._auth.account)
+                event = normalize_message(full_msg, self._auth.account, include_sent=self._include_sent)
                 if event is not None:
                     self._dispatch_event(event)
             except Exception:
@@ -316,7 +336,7 @@ class GmailConnector:
     def _on_new_messages(self, messages: list[dict]) -> None:
         """Callback from poller: normalise and dispatch to listeners."""
         for msg in messages:
-            event = normalize_message(msg, self._auth.account)
+            event = normalize_message(msg, self._auth.account, include_sent=self._include_sent)
             if event is not None:
                 self._dispatch_event(event)
 

@@ -148,6 +148,18 @@ class TestSelfMessageFiltering:
         )
         assert msg is None
 
+    def test_include_sent_emits_own_message(self):
+        """With include_sent, a message from the authenticated identity is emitted."""
+        msg = normalize_message(
+            _base_event(user=_AUTH_UID),
+            team_id=_TEAM_ID,
+            authenticated_user_id=_AUTH_UID,
+            resolve_user=_fake_resolve,
+            include_sent=True,
+        )
+        assert msg is not None
+        assert msg.author.id == _AUTH_UID
+
 
 class TestThreading:
     """Conversation ref type and thread_ts handling."""

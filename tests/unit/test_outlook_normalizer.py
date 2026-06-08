@@ -54,6 +54,15 @@ class TestNormalizeMessage:
         event = normalize_message(msg, account_id="test", sent_ids=sent_ids)
         assert event is None
 
+    def test_include_sent_emits_own_message(self):
+        """With include_sent, a message in sent_ids is still emitted."""
+        msg = _make_graph_message()
+        sent_ids = {"AAMkAGI2TG93AAA="}
+
+        event = normalize_message(msg, account_id="test", sent_ids=sent_ids, include_sent=True)
+        assert event is not None
+        assert event.message_id == "AAMkAGI2TG93AAA="
+
     def test_empty_id_returns_none(self):
         """Message without id returns None."""
         msg = _make_graph_message(id="")

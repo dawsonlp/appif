@@ -159,6 +159,28 @@ class TestCredentialValidation:
         assert conn.get_status() == ConnectorStatus.DISCONNECTED
 
 
+class TestIncludeSent:
+    """include_sent configuration flag."""
+
+    def test_default_excludes_sent(self):
+        conn = SlackConnector(identity_token="xoxb-valid")
+        assert conn._include_sent is False
+
+    def test_include_sent_param(self):
+        conn = SlackConnector(identity_token="xoxb-valid", include_sent=True)
+        assert conn._include_sent is True
+
+    def test_include_sent_from_env(self):
+        with patch.dict(os.environ, {"APPIF_SLACK_INCLUDE_SENT": "yes"}, clear=False):
+            conn = SlackConnector(identity_token="xoxb-valid")
+        assert conn._include_sent is True
+
+    def test_explicit_param_overrides_env(self):
+        with patch.dict(os.environ, {"APPIF_SLACK_INCLUDE_SENT": "yes"}, clear=False):
+            conn = SlackConnector(identity_token="xoxb-valid", include_sent=False)
+        assert conn._include_sent is False
+
+
 # ---------------------------------------------------------------------------
 # Capabilities (offline — no connection required)
 # ---------------------------------------------------------------------------

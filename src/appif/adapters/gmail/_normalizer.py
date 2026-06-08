@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 _CONNECTOR_NAME = "gmail"
 
 
-def normalize_message(message: dict, account_id: str) -> MessageEvent | None:
+def normalize_message(message: dict, account_id: str, *, include_sent: bool = False) -> MessageEvent | None:
     """Convert a Gmail API message dict into a ``MessageEvent``.
 
     Parameters
@@ -35,6 +35,10 @@ def normalize_message(message: dict, account_id: str) -> MessageEvent | None:
         Raw JSON dict from ``users.messages.get`` with ``format=full``.
     account_id:
         The authenticated mailbox address (for echo suppression).
+    include_sent:
+        When ``False`` (default), messages authored by ``account_id`` are
+        suppressed. When ``True``, such messages are normalised and emitted
+        like any other — used to surface the user's own sent mail.
 
     Returns
     -------
@@ -50,7 +54,7 @@ def normalize_message(message: dict, account_id: str) -> MessageEvent | None:
     # ── Echo suppression ──────────────────────────────────────
     from_header = headers.get("from", "")
     _name, from_email = email.utils.parseaddr(from_header)
-    if from_email.lower() == account_id.lower():
+    if not include_sent and from_email.lower() == account_id.lower():
         logger.debug("gmail.echo_suppressed", extra={"message_id": msg_id})
         return None
 

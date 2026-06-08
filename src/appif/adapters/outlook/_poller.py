@@ -41,6 +41,8 @@ class OutlookPoller:
         Function to invoke for each normalised ``MessageEvent``.
     sent_ids:
         Shared set of message IDs sent by the connector (echo suppression).
+    include_sent:
+        When ``True``, sent messages are emitted instead of suppressed.
     """
 
     def __init__(
@@ -52,6 +54,7 @@ class OutlookPoller:
         poll_interval: int = 30,
         callback: Callable[[MessageEvent], None],
         sent_ids: set[str],
+        include_sent: bool = False,
     ) -> None:
         self._access_token_fn = access_token_fn
         self._account_id = account_id
@@ -59,6 +62,7 @@ class OutlookPoller:
         self._poll_interval = poll_interval
         self._callback = callback
         self._sent_ids = sent_ids
+        self._include_sent = include_sent
 
         # State
         self._delta_links: dict[str, str] = {}  # folder → deltaLink (volatile)
@@ -175,6 +179,7 @@ class OutlookPoller:
                 msg,
                 account_id=self._account_id,
                 sent_ids=self._sent_ids,
+                include_sent=self._include_sent,
             )
             if event is not None:
                 try:

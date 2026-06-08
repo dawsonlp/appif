@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-06-08
+
+### Added
+
+- **Messaging: read your own sent messages** (`include_sent`) -- each
+  messaging connector (Gmail, Outlook, Slack) can now deliver messages you
+  sent alongside incoming ones. Opt-in via the `include_sent` constructor
+  parameter or `APPIF_<CONNECTOR>_INCLUDE_SENT` environment variable;
+  default off, preserving prior echo-suppression behavior. When enabled the
+  watch set is extended automatically where the platform stores sent mail
+  separately (Gmail `SENT` label, Outlook `SentItems` folder); Slack
+  delivers own messages over Socket Mode once self-filtering is disabled.
+  Applies to both realtime and backfill paths. `[6ac949c]`
+
+### Fixed
+
+- **Test isolation** -- unit tests now strip and restore `APPIF_*`
+  environment variables per test, preventing `load_dotenv(~/.env)` (invoked
+  during auth construction) from leaking real credentials across tests and
+  causing ordering-dependent failures. `[1de3ef8]`
+
 ## [1.2.1] - 2026-03-29
 
 ### Changed

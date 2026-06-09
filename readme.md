@@ -8,14 +8,14 @@ Agents need information that lives behind logins: email threads, Slack messages,
 
 **Two domains are supported:**
 
-- **Messaging** -- Gmail, Outlook, Slack. Unified `MessageEvent` objects via the `Connector` protocol.
+- **Messaging** -- Gmail, Outlook, Slack, Microsoft Teams. Unified `MessageEvent` objects via the `Connector` protocol.
 - **Work Tracking** -- Jira. Unified `WorkItem` objects via the `WorkTracker` protocol. Multi-instance support with programmatic registration or optional YAML config.
 
 **For the complete usage guide -- the unified model, per-connector mapping tables, code examples, and environment variable reference -- see [docs/usage.md](docs/usage.md).**
 
 ## Quick Start
 
-### Messaging (Gmail, Outlook, Slack)
+### Messaging (Gmail, Outlook, Slack, Teams)
 
 ```bash
 pip install appif
@@ -34,7 +34,7 @@ connector.connect()
 connector.register_listener(MyListener())
 ```
 
-All three messaging connectors (Gmail, Outlook, Slack) follow this same pattern. The full model, per-connector setup, and examples are in **[docs/usage.md](docs/usage.md)**.
+All messaging connectors (Gmail, Outlook, Slack, Teams) follow this same pattern. The full model, per-connector setup, and examples are in **[docs/usage.md](docs/usage.md)**.
 
 ### Work Tracking (Jira)
 

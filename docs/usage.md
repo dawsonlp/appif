@@ -2,7 +2,7 @@
 
 ## Overview
 
-appif provides a unified messaging interface across Gmail, Outlook, and Slack. Every connector implements the same `Connector` protocol and produces the same domain types. Your code works with `MessageEvent`, `ConversationRef`, and `MessageContent` -- never with platform-specific objects.
+appif provides a unified messaging interface across Gmail, Outlook, Slack, and Microsoft Teams. Every connector implements the same `Connector` protocol and produces the same domain types. Your code works with `MessageEvent`, `ConversationRef`, and `MessageContent` -- never with platform-specific objects.
 
 ## Installation
 
@@ -10,7 +10,7 @@ appif provides a unified messaging interface across Gmail, Outlook, and Slack. E
 pip install appif
 ```
 
-All three connectors (Gmail, Outlook, Slack) and their dependencies are included.
+All four connectors (Gmail, Outlook, Slack, Teams) and their dependencies are included.
 
 ## The Unified Model
 
@@ -23,7 +23,7 @@ from appif.domain.messaging.models import MessageEvent
 
 # Fields:
 #   message_id: str          -- unique ID (platform-assigned)
-#   connector: str           -- "gmail", "outlook", or "slack"
+#   connector: str           -- "gmail", "outlook", "slack", or "teams"
 #   account_id: str          -- which account received it
 #   conversation_ref: ConversationRef  -- opaque reply handle
 #   author: Identity         -- who sent it
@@ -41,7 +41,7 @@ from appif.domain.messaging.models import Identity
 # Fields:
 #   id: str            -- platform user ID or email address
 #   display_name: str  -- human-readable name
-#   connector: str     -- "gmail", "outlook", or "slack"
+#   connector: str     -- "gmail", "outlook", "slack", or "teams"
 #   email: str | None  -- email address when resolvable (None if unknown)
 ```
 
@@ -91,7 +91,7 @@ from appif.domain.messaging.models import MessageContent, Attachment
 from appif.domain.messaging.models import ConversationRef
 
 # Fields:
-#   connector: str      -- "gmail", "outlook", or "slack"
+#   connector: str      -- "gmail", "outlook", "slack", or "teams"
 #   account_id: str     -- which account
 #   type: str           -- "email_thread", "dm", "channel", "thread", etc.
 #   opaque_id: dict     -- internal routing data (do not touch)
@@ -123,7 +123,7 @@ from appif.domain.messaging.models import ConnectorCapabilities
 
 ## Using a Connector
 
-All three connectors follow the same lifecycle:
+All connectors follow the same lifecycle:
 
 ```python
 # 1. Create
@@ -477,6 +477,51 @@ supports_auto_send: True
 delivery_mode:      "AUTOMATIC"
 ```
 
+## Teams
+
+```python
+from appif.adapters.teams import TeamsConnector
+
+connector = TeamsConnector()   # chats by default; channels opt-in
+connector.connect()
+connector.register_listener(handler)
+```
+
+Run `python scripts/teams_consent.py` once to authorize (add `--channels` for channel access, which needs admin consent). Teams reuses the same Microsoft Graph + MSAL stack as Outlook but keeps a **separate token cache** at `~/.config/appif/teams`. It can share the Outlook Azure app registration: `client_id`/`tenant_id` fall back to `APPIF_OUTLOOK_*` when the Teams-specific vars are unset.
+
+### Teams Concept Mapping
+
+| Teams Concept | appif Model |
+|---|---|
+| Microsoft 365 account | `Account.account_id` / `Account.display_name` |
+| Chat (1:1, group, meeting) | `Target` (type: `"chat"`); `ConversationRef` (type: `"chat"`) |
+| Team channel | `Target` (type: `"channel"`); `ConversationRef` (type: `"channel"`) |
+| Chat or channel message | `MessageEvent` |
+| Sender | `Identity` (id = AAD user id) |
+| `@`-mentions in message | `MessageEvent.recipients.to` (best-effort) |
+| Message body (HTML→text) | `MessageContent.text` |
+| Subject, importance, raw HTML | `MessageEvent.metadata` |
+
+### Teams-Specific Behavior
+
+- **Sources**: 1:1/group **chats** are watched by default. **Channels** are opt-in (`include_channels=True` / `APPIF_TEAMS_INCLUDE_CHANNELS=true`) because `ChannelMessage.Read.All` requires Azure AD **admin consent**; chats need none.
+- **Polling**: Uses Graph `messages/delta` per chat and per channel (v1 has no real-time push; that would require Graph change-notification subscriptions). Poll interval via `APPIF_TEAMS_POLL_INTERVAL_SECONDS` (default 30).
+- **Reading your own messages**: By default messages you sent are suppressed (`from.user.id == your AAD id`). Set `include_sent=True` (or `APPIF_TEAMS_INCLUDE_SENT=true`) to deliver them. **Caution:** auto-replying listeners can echo-loop; make them idempotent or filter on `event.author`.
+- **Threading**: Channel replies are supported — `ConversationRef.opaque_id` carries `team_id`, `channel_id`, and the root `message_id`; sending with a `message_id` posts a reply.
+- **HTML stripping**: Message HTML is converted to plain text automatically (raw HTML kept in `metadata["html_body"]`).
+- **Send**: Chats post to `/chats/{id}/messages`; channels post a new message or a reply depending on the `ConversationRef`.
+
+### Capabilities
+
+```
+supports_realtime:  False (delta polling)
+supports_backfill:  True
+supports_threads:   True
+supports_reply:     True
+supports_auto_send: True
+delivery_mode:      "AUTOMATIC"
+```
+
 ## Error Handling
 
 All connectors raise the same typed errors from `appif.domain.messaging.errors`:
@@ -581,3 +626,17 @@ slack.disconnect()
 | `APPIF_SLACK_USER_OAUTH_TOKEN` | (optional) | User OAuth token (`xoxp-...`) -- for connecting as yourself |
 | `APPIF_SLACK_BOT_APP_LEVEL_TOKEN` | (optional) | App-level token for Socket Mode (`xapp-...`) -- enables real-time events |
 | `APPIF_SLACK_INCLUDE_SENT` | `false` | Deliver your own messages to listeners instead of filtering them |
+
+### Teams
+
+| Variable | Default | Description |
+|---|---|---|
+| `APPIF_TEAMS_CLIENT_ID` | (falls back to `APPIF_OUTLOOK_CLIENT_ID`) | Azure AD application (client) ID |
+| `APPIF_TEAMS_CLIENT_SECRET` | (falls back to `APPIF_OUTLOOK_CLIENT_SECRET`) | Client secret for confidential-client flow |
+| `APPIF_TEAMS_TENANT_ID` | (falls back to `APPIF_OUTLOOK_TENANT_ID`, else `common`) | Azure AD tenant |
+| `APPIF_TEAMS_ACCOUNT` | `default` | Logical account label |
+| `APPIF_TEAMS_CREDENTIALS_DIR` | `~/.config/appif/teams` | MSAL token cache directory (separate from Outlook) |
+| `APPIF_TEAMS_POLL_INTERVAL_SECONDS` | `30` | Seconds between delta-poll cycles |
+| `APPIF_TEAMS_INCLUDE_CHATS` | `true` | Watch 1:1/group chat messages |
+| `APPIF_TEAMS_INCLUDE_CHANNELS` | `false` | Watch team channel messages (needs admin-consented `ChannelMessage.Read.All`) |
+| `APPIF_TEAMS_INCLUDE_SENT` | `false` | Deliver your own messages to listeners instead of suppressing them |

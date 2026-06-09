@@ -1,6 +1,6 @@
 # Adapters
 
-**Last Updated**: 2026-03-07
+**Last Updated**: 2026-06-08
 
 Documentation of the working messaging adapters in the `appif` project.
 
@@ -14,6 +14,7 @@ Documentation of the working messaging adapters in the `appif` project.
 - [Gmail Adapter](#gmail-adapter)
 - [Outlook Adapter](#outlook-adapter)
 - [Slack Adapter](#slack-adapter)
+- [Teams Adapter](#teams-adapter)
 - [Installation](#installation)
 - [Environment Variables](#environment-variables)
 - [Running Tests](#running-tests)
@@ -22,7 +23,7 @@ Documentation of the working messaging adapters in the `appif` project.
 
 ## Overview
 
-Three messaging adapters are implemented: **Gmail**, **Outlook**, and **Slack**. All implement the same `Connector` protocol defined in the domain layer, providing a platform-agnostic interface for sending, receiving, and backfilling messages across different platforms.
+Four messaging adapters are implemented: **Gmail**, **Outlook**, **Slack**, and **Microsoft Teams**. All implement the same `Connector` protocol defined in the domain layer, providing a platform-agnostic interface for sending, receiving, and backfilling messages across different platforms.
 
 Each adapter encapsulates all platform-specific logic (authentication, API calls, message formatting, polling) behind the domain protocol. Upstream code interacts only with domain types — never with Gmail API, Graph API, or Slack SDK types directly.
 
@@ -86,21 +87,21 @@ Design rules: at-least-once delivery, no return values, no backpressure coupling
 
 ## Adapter Summary
 
-| Feature | Gmail | Outlook | Slack |
-|---------|-------|---------|-------|
-| **Platform** | Gmail API (Google) | Graph API (Microsoft 365) | Slack API (Bolt + Socket Mode) |
-| **Delivery Mode** | AUTOMATIC + ASSISTED | AUTOMATIC + ASSISTED | AUTOMATIC |
-| **Inbound Method** | `history.list` polling | Delta-query polling | Socket Mode (real-time) |
-| **Threading** | ✅ RFC 2822 headers | ✅ Graph `conversationId` | ✅ Slack thread_ts |
-| **Attachments** | ✅ Send and receive | ✅ Send and receive | ✅ Send and receive |
-| **Reactions** | ❌ | ❌ | ✅ |
-| **Editing** | ❌ | ❌ | ✅ |
-| **Auth Method** | OAuth 2.0 (file-based tokens) | OAuth 2.0 via MSAL | Bot token (`xoxb-`) or User token (`xoxp-`) + optional App token (`xapp-`) |
-| **Credential Storage** | `~/.config/appif/gmail/<account>.json` | `~/.config/appif/outlook/<account>.json` | Environment variables |
-| **Multi-account** | ✅ | ✅ | Single workspace |
-| **Consent Script** | `scripts/gmail_consent.py` | `scripts/outlook_consent.py` | N/A (token from Slack app) |
-| **Unit Tests** | 90 tests (6 files) | 66 tests (6 files) | Tests require `slack_bolt` |
-| **Optional Dep Group** | `gmail` | `outlook` | `slack` |
+| Feature | Gmail | Outlook | Slack | Teams |
+|---------|-------|---------|-------|-------|
+| **Platform** | Gmail API (Google) | Graph API (Microsoft 365) | Slack API (Bolt + Socket Mode) | Graph API (Microsoft Teams) |
+| **Delivery Mode** | AUTOMATIC + ASSISTED | AUTOMATIC + ASSISTED | AUTOMATIC | AUTOMATIC |
+| **Inbound Method** | `history.list` polling | Delta-query polling | Socket Mode (real-time) | `messages/delta` polling (chats + channels) |
+| **Threading** | ✅ RFC 2822 headers | ✅ Graph `conversationId` | ✅ Slack thread_ts | ✅ Channel replies (`replyToId`) |
+| **Attachments** | ✅ Send and receive | ✅ Send and receive | ✅ Send and receive | Receive (metadata) |
+| **Reactions** | ❌ | ❌ | ✅ | ❌ |
+| **Editing** | ❌ | ❌ | ✅ | ❌ |
+| **Auth Method** | OAuth 2.0 (file-based tokens) | OAuth 2.0 via MSAL | Bot token (`xoxb-`) or User token (`xoxp-`) + optional App token (`xapp-`) | OAuth 2.0 via MSAL (shares Outlook app reg) |
+| **Credential Storage** | `~/.config/appif/gmail/<account>.json` | `~/.config/appif/outlook/<account>.json` | Environment variables | `~/.config/appif/teams/<account>.json` |
+| **Multi-account** | ✅ | ✅ | Single workspace | ✅ |
+| **Consent Script** | `scripts/gmail_consent.py` | `scripts/outlook_consent.py` | N/A (token from Slack app) | `scripts/teams_consent.py` |
+| **Unit Tests** | 90 tests (6 files) | 66 tests (6 files) | Tests require `slack_bolt` | 44 tests (4 files) |
+| **Optional Dep Group** | `gmail` | `outlook` | `slack` | core deps (no extra) |
 
 ---
 
@@ -263,6 +264,53 @@ Slack tests run as part of the standard test suite: `pytest tests/unit -v`
 
 ---
 
+## Teams Adapter
+
+`TeamsConnector` bridges Microsoft Teams (chats and channel messages) to the domain messaging port over the Microsoft Graph API. It reuses the same Graph + MSAL stack as the Outlook adapter — and may share its Azure app registration — but keeps a **separate token cache** (`~/.config/appif/teams`).
+
+### Module Map
+
+| File | Responsibility |
+|------|----------------|
+| `connector.py` | `TeamsConnector` — lifecycle, discovery, send, backfill |
+| `_auth.py` | `MsalAuth` + scope groups (`scopes_for`); separate Teams token cache |
+| `_normalizer.py` | Graph `chatMessage` → `MessageEvent` (chat + channel), HTML→text, self-suppression, @-mention recipients |
+| `_poller.py` | Per-chat and per-channel `messages/delta` polling on a daemon thread |
+| `_message_builder.py` | Routes outbound sends to chat / new-channel / channel-reply paths |
+| `_rate_limiter.py` | httpx GET/POST with 429 + 5xx retry, error mapping |
+
+### Capabilities
+
+- **Sources**: chats (default on) and team channels (opt-in via `include_channels` / `APPIF_TEAMS_INCLUDE_CHANNELS`).
+- **Delivery**: AUTOMATIC. Inbound via Graph delta polling (no real-time push in v1).
+- **Send**: chat messages, new channel messages, and channel replies (routed by `ConversationRef`).
+- **Backfill**: pages chat/channel messages, filtered client-side by `BackfillScope` time range.
+- **Self-suppression**: messages where `from.user.id` equals the authenticated AAD id are dropped unless `include_sent=True` (`APPIF_TEAMS_INCLUDE_SENT`).
+- **Recipients**: best-effort from message `@`-mentions (`MessageEvent.recipients.to`).
+
+### Scopes & Consent
+
+- **Chats** (`Chat.Read`, `ChatMessage.Send`, `User.Read`) require **no admin consent**.
+- **Channels** (`ChannelMessage.Read.All`, `Team.ReadBasic.All`, `Channel.ReadBasic.All`, `ChannelMessage.Send`) **require Azure AD admin consent**, so channels are opt-in.
+- The connector requests only the scope groups it is configured for, so silent token acquisition matches what was consented.
+
+### Credential Setup
+
+1. Use an Azure AD app registration (the Outlook one works) with redirect URI `http://localhost`.
+2. Set `APPIF_TEAMS_CLIENT_ID` (or rely on `APPIF_OUTLOOK_CLIENT_ID`) and `APPIF_TEAMS_TENANT_ID` in `~/.env`.
+3. Run consent: `python scripts/teams_consent.py` (add `--channels` once an admin has approved channel scopes).
+
+### Tests
+
+| File | Covers |
+|------|--------|
+| `test_teams_normalizer.py` | Chat/channel normalization, self-suppression, mentions→recipients, HTML, attachments |
+| `test_teams_message_builder.py` | Send routing (chat / channel / reply) and error cases |
+| `test_teams_connector.py` | Config resolution, scope groups, capabilities, lifecycle guards, listeners |
+| `test_teams_poller.py` | Delta dispatch, deltaLink reuse, pagination, self-suppression |
+
+---
+
 ## Installation
 
 All adapter dependencies are included in the core package -- no optional extras needed.
@@ -317,6 +365,15 @@ All variables use the `APPIF_` prefix. Store secrets in `~/.env` (loaded via `py
 | `APPIF_SLACK_BOT_OAUTH_TOKEN` | Bot user OAuth token (`xoxb-...`) |
 | `APPIF_SLACK_USER_OAUTH_TOKEN` | User OAuth token (`xoxp-...`) — for connecting as yourself |
 | `APPIF_SLACK_BOT_APP_LEVEL_TOKEN` | App-level token for Socket Mode (`xapp-...`, optional) |
+
+### Teams
+
+| Variable | Purpose |
+|----------|---------|
+| `APPIF_TEAMS_CLIENT_ID` | Azure AD application (client) ID (falls back to `APPIF_OUTLOOK_CLIENT_ID`) |
+| `APPIF_TEAMS_TENANT_ID` | Azure AD tenant ID (falls back to `APPIF_OUTLOOK_TENANT_ID`) |
+| `APPIF_TEAMS_INCLUDE_CHANNELS` | Watch team channels (default `false`; needs admin-consented `ChannelMessage.Read.All`) |
+| `APPIF_TEAMS_INCLUDE_SENT` | Deliver your own messages instead of suppressing them (default `false`) |
 
 See [`.env.example`](.env.example) for the full template.
 

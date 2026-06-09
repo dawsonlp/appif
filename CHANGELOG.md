@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-06-08
+
+### Added
+
+- **Microsoft Teams connector** (`appif.adapters.teams.TeamsConnector`) --
+  a new messaging adapter implementing the `Connector` protocol over the
+  Microsoft Graph API for Teams chats and channel messages. Mirrors the
+  Outlook adapter's Graph + MSAL approach but keeps a **separate token
+  cache** (`~/.config/appif/teams`) and can reuse the Outlook Azure app
+  registration (`client_id`/`tenant_id` fall back to `APPIF_OUTLOOK_*`).
+  - 1:1/group **chats** are watched by default; **channels** are opt-in
+    (`include_channels` / `APPIF_TEAMS_INCLUDE_CHANNELS`) because
+    `ChannelMessage.Read.All` requires Azure AD admin consent.
+  - Inbound via per-conversation `messages/delta` polling; sends route to
+    chat / new-channel / channel-reply endpoints from the `ConversationRef`.
+  - Honors the shared `include_sent` model (`APPIF_TEAMS_INCLUDE_SENT`):
+    own messages suppressed by default, surfaced when enabled.
+  - `@`-mentions populate `MessageEvent.recipients.to`; HTML bodies are
+    stripped to text. New consent helper: `scripts/teams_consent.py`.
+
 ## [1.4.0] - 2026-06-08
 
 ### Added

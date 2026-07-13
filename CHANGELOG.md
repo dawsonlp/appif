@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [2.0.0] - 2026-07-13
+
+Major version bump to signal a **breaking API change** in the work-tracking
+domain (see below). Messaging connectors are unaffected.
 
 ### Changed
 

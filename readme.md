@@ -11,7 +11,7 @@ Agents need information that lives behind logins: email threads, Slack messages,
 - **Messaging** -- Gmail, Outlook, Slack, Microsoft Teams. Unified `MessageEvent` objects via the `Connector` protocol.
 - **Work Tracking** -- Jira. Unified `WorkItem` objects via the `WorkTracker` protocol. Multi-instance support with programmatic registration or optional YAML config.
 
-**For the complete usage guide -- the unified model, per-connector mapping tables, code examples, and environment variable reference -- see [docs/usage.md](docs/usage.md).**
+**For the complete usage guide -- the unified model, per-connector mapping tables, code examples, and environment variable reference -- see [docs/usage.md](https://github.com/dawsonlp/appif/blob/main/docs/usage.md).**
 
 ## Quick Start
 
@@ -34,7 +34,7 @@ connector.connect()
 connector.register_listener(MyListener())
 ```
 
-All messaging connectors (Gmail, Outlook, Slack, Teams) follow this same pattern. The full model, per-connector setup, and examples are in **[docs/usage.md](docs/usage.md)**.
+All messaging connectors (Gmail, Outlook, Slack, Teams) follow this same pattern. The full model, per-connector setup, and examples are in **[docs/usage.md](https://github.com/dawsonlp/appif/blob/main/docs/usage.md)**.
 
 ### Work Tracking (Jira)
 
@@ -165,7 +165,7 @@ connector = OutlookConnector(
 )
 ```
 
-Gmail, Slack, and Teams connectors follow the same pattern. When a constructor parameter is omitted, the connector falls back to environment variables (`APPIF_GMAIL_CLIENT_ID`, `APPIF_OUTLOOK_CLIENT_ID`, `APPIF_SLACK_BOT_OAUTH_TOKEN`, `APPIF_TEAMS_CLIENT_ID`, etc.). See [.env.example](.env.example) for the full list.
+Gmail, Slack, and Teams connectors follow the same pattern. When a constructor parameter is omitted, the connector falls back to environment variables (`APPIF_GMAIL_CLIENT_ID`, `APPIF_OUTLOOK_CLIENT_ID`, `APPIF_SLACK_BOT_OAUTH_TOKEN`, `APPIF_TEAMS_CLIENT_ID`, etc.). See [.env.example](https://github.com/dawsonlp/appif/blob/main/.env.example) for the full list.
 
 ### Work Tracking
 
@@ -186,7 +186,7 @@ service.register(
 )
 ```
 
-Multiple instances can be registered and selected per-call via the `instance` parameter. The service depends only on the platform-agnostic `WorkTrackerBackend` port — the caller (or a composition factory) wires in the concrete adapter, so the domain never imports an adapter (see [ADR-002](docs/adr/002-work-tracking-hexagonal-ports.md)).
+Multiple instances can be registered and selected per-call via the `instance` parameter. The service depends only on the platform-agnostic `WorkTrackerBackend` port — the caller (or a composition factory) wires in the concrete adapter, so the domain never imports an adapter (see [ADR-002](https://github.com/dawsonlp/appif/blob/main/docs/adr/002-work-tracking-hexagonal-ports.md)).
 
 > **CLI and personal development use only:** `create_work_tracking_service()` (in `appif.adapters.jira`) builds a service pre-loaded from a YAML file at `~/.config/appif/jira/config.yaml` (or the `APPIF_JIRA_CONFIG` env var). This convenience exists solely for the appif CLIs and local development scripts; applications should construct the service and supply credentials programmatically as above.
 
@@ -303,25 +303,25 @@ The Jira adapter uses a similar pattern with `adapter.py` (operations), `_auth.p
 
 | Adapter | Auth Method | Setup Guide |
 |---------|-------------|-------------|
-| Gmail | OAuth 2.0 (`python scripts/gmail_consent.py <account>`) | [docs/design/gmail/setup.md](docs/design/gmail/setup.md) |
-| Outlook | OAuth 2.0 (`python scripts/outlook_consent.py <account>`) | [docs/design/outlook/setup.md](docs/design/outlook/setup.md) |
-| Slack | Bot + App tokens from Slack app config | [docs/design/slack/setup.md](docs/design/slack/setup.md) |
-| Microsoft Teams | OAuth 2.0 (`python scripts/teams_consent.py <account>`) | [docs/usage.md#teams](docs/usage.md) |
-| Jira | API token (programmatic `register()` or YAML config) | [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) |
+| Gmail | OAuth 2.0 (`python scripts/gmail_consent.py <account>`) | [docs/design/gmail/setup.md](https://github.com/dawsonlp/appif/blob/main/docs/design/gmail/setup.md) |
+| Outlook | OAuth 2.0 (`python scripts/outlook_consent.py <account>`) | [docs/design/outlook/setup.md](https://github.com/dawsonlp/appif/blob/main/docs/design/outlook/setup.md) |
+| Slack | Bot + App tokens from Slack app config | [docs/design/slack/setup.md](https://github.com/dawsonlp/appif/blob/main/docs/design/slack/setup.md) |
+| Microsoft Teams | OAuth 2.0 (`python scripts/teams_consent.py <account>`) | [Teams setup](https://github.com/dawsonlp/appif/blob/main/docs/usage.md#teams) |
+| Jira | API token (programmatic `register()` or YAML config) | [docs/design/work_tracking/setup.md](https://github.com/dawsonlp/appif/blob/main/docs/design/work_tracking/setup.md) |
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [docs/usage.md](docs/usage.md) | **Start here** — unified messaging model, per-connector setup, code examples |
-| [API Reference](docs/api_reference.md) | Complete method signatures, domain models, and error types |
-| [CHANGELOG.md](CHANGELOG.md) | Version history, breaking changes, and migration guides |
-| [docs/design/gmail/](docs/design/gmail/) | Gmail design, technical design, setup |
-| [docs/design/outlook/](docs/design/outlook/) | Outlook design, technical design, setup |
-| [docs/design/slack/](docs/design/slack/) | Slack design, technical design, setup |
-| [docs/design/work_tracking/](docs/design/work_tracking/) | Jira requirements, design, technical design, setup |
-| [docs/adr/](docs/adr/) | Architecture decision records |
+| [docs/usage.md](https://github.com/dawsonlp/appif/blob/main/docs/usage.md) | **Start here** — unified messaging model, per-connector setup, code examples |
+| [API Reference](https://github.com/dawsonlp/appif/blob/main/docs/api_reference.md) | Complete method signatures, domain models, and error types |
+| [CHANGELOG.md](https://github.com/dawsonlp/appif/blob/main/CHANGELOG.md) | Version history, breaking changes, and migration guides |
+| [docs/design/gmail/](https://github.com/dawsonlp/appif/tree/main/docs/design/gmail/) | Gmail design, technical design, setup |
+| [docs/design/outlook/](https://github.com/dawsonlp/appif/tree/main/docs/design/outlook/) | Outlook design, technical design, setup |
+| [docs/design/slack/](https://github.com/dawsonlp/appif/tree/main/docs/design/slack/) | Slack design, technical design, setup |
+| [docs/design/work_tracking/](https://github.com/dawsonlp/appif/tree/main/docs/design/work_tracking/) | Jira requirements, design, technical design, setup |
+| [docs/adr/](https://github.com/dawsonlp/appif/tree/main/docs/adr/) | Architecture decision records |
 
 ## License
 
-GPL-3.0-or-later -- see [LICENSE](LICENSE).
+GPL-3.0-or-later -- see [LICENSE](https://github.com/dawsonlp/appif/blob/main/LICENSE).

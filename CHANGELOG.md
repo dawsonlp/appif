@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.1] - 2026-07-13
+
+### Fixed
+
+- **README links now resolve on PyPI.** The project description used relative
+  links (`docs/...`, `LICENSE`, `.env.example`) which 404 on the PyPI page
+  (PyPI does not resolve them against the repo). They are now absolute GitHub
+  URLs, which also work on GitHub.
+
 ## [2.0.0] - 2026-07-13
 
 Major version bump to signal a **breaking API change** in the work-tracking

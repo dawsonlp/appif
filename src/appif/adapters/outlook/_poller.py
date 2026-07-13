@@ -11,9 +11,9 @@ import logging
 import threading
 from collections.abc import Callable
 
-import httpx
-
 from appif.adapters.outlook._normalizer import normalize_message
+from appif.adapters.outlook._rate_limiter import graph_get
+from appif.domain.messaging.errors import NotAuthorized, TargetUnavailable
 from appif.domain.messaging.models import MessageEvent
 
 logger = logging.getLogger(__name__)
@@ -111,8 +111,7 @@ class OutlookPoller:
 
     def _poll_folder(self, folder: str) -> None:
         """Poll a single folder using delta queries."""
-        token = self._access_token_fn()
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": f"Bearer {self._access_token_fn()}"}
 
         delta_link = self._delta_links.get(folder)
 
@@ -131,27 +130,18 @@ class OutlookPoller:
 
         while url:
             try:
-                response = httpx.get(url, headers=headers, timeout=30.0)
-            except httpx.HTTPError as exc:
-                logger.warning("outlook.poller.http_error", extra={"folder": folder, "error": str(exc)})
-                return
-
-            if response.status_code == 410:
-                # Delta link expired — reset and do full sync
+                response = graph_get(url, headers=headers)
+            except TargetUnavailable:
+                # 410 Gone — delta token expired; reset and do a full re-sync.
                 logger.info("outlook.poller.delta_expired", extra={"folder": folder})
                 self._delta_links.pop(folder, None)
                 self._poll_folder(folder)
                 return
-
-            if response.status_code == 401:
+            except NotAuthorized:
                 logger.warning("outlook.poller.auth_expired", extra={"folder": folder})
                 return
-
-            if not response.is_success:
-                logger.warning(
-                    "outlook.poller.unexpected_status",
-                    extra={"folder": folder, "status": response.status_code},
-                )
+            except Exception as exc:
+                logger.warning("outlook.poller.http_error", extra={"folder": folder, "error": str(exc)})
                 return
 
             data = response.json()

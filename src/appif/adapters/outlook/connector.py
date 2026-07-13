@@ -13,13 +13,12 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
-
 from appif.adapters.outlook._auth import MsalAuth
 from appif.adapters.outlook._message_builder import build_message
 from appif.adapters.outlook._normalizer import normalize_message
 from appif.adapters.outlook._poller import OutlookPoller
-from appif.domain.messaging.errors import NotAuthorized, NotSupported, TransientFailure
+from appif.adapters.outlook._rate_limiter import graph_get, graph_post
+from appif.domain.messaging.errors import ConnectorError, NotAuthorized, NotSupported, TransientFailure
 from appif.domain.messaging.models import (
     Account,
     BackfillScope,
@@ -214,19 +213,8 @@ class OutlookConnector:
         """List mail folders as targets."""
         self._ensure_connected()
 
-        token = self._get_access_token()
-        headers = {"Authorization": f"Bearer {token}"}
-
-        try:
-            response = httpx.get(
-                f"{_GRAPH_BASE}/me/mailFolders",
-                headers=headers,
-                params={"$top": "100"},
-                timeout=30.0,
-            )
-            response.raise_for_status()
-        except Exception as exc:
-            raise TransientFailure(_CONNECTOR_NAME, reason=f"list_targets failed: {exc}") from exc
+        headers = {"Authorization": f"Bearer {self._get_access_token()}"}
+        response = graph_get(f"{_GRAPH_BASE}/me/mailFolders", headers=headers, params={"$top": "100"})
 
         folders = response.json().get("value", [])
         return [
@@ -261,36 +249,19 @@ class OutlookConnector:
 
         payload = build_message(conversation, content)
         route = payload.pop("_route")
-        token = self._get_access_token()
         headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self._get_access_token()}",
             "Content-Type": "application/json",
         }
 
         try:
             if route == "reply":
                 parent_id = payload.pop("_parent_message_id")
-                response = httpx.post(
-                    f"{_GRAPH_BASE}/me/messages/{parent_id}/reply",
-                    json=payload,
-                    headers=headers,
-                    timeout=30.0,
-                )
+                response = graph_post(f"{_GRAPH_BASE}/me/messages/{parent_id}/reply", headers=headers, json=payload)
             else:
-                response = httpx.post(
-                    f"{_GRAPH_BASE}/me/sendMail",
-                    json=payload,
-                    headers=headers,
-                    timeout=30.0,
-                )
-
-            response.raise_for_status()
-
-        except httpx.HTTPStatusError as exc:
-            raise TransientFailure(
-                _CONNECTOR_NAME,
-                reason=f"send failed ({exc.response.status_code}): {exc.response.text[:200]}",
-            ) from exc
+                response = graph_post(f"{_GRAPH_BASE}/me/sendMail", headers=headers, json=payload)
+        except ConnectorError:
+            raise
         except Exception as exc:
             raise TransientFailure(_CONNECTOR_NAME, reason=f"send failed: {exc}") from exc
 
@@ -389,8 +360,7 @@ class OutlookConnector:
 
         while url:
             try:
-                response = httpx.get(url, headers=headers, params=params, timeout=30.0)
-                response.raise_for_status()
+                response = graph_get(url, headers=headers, params=params)
             except Exception as exc:
                 logger.warning(
                     "outlook.backfill_error",

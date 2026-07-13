@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for `appif` version 1.0.0.
+Complete API reference for `appif` version 1.5.0.
 
 ---
 
@@ -10,8 +10,8 @@ Complete API reference for `appif` version 1.0.0.
 
 **Import**: `from appif.domain.messaging.ports import Connector`
 
-All messaging adapters (`GmailConnector`, `OutlookConnector`, `SlackConnector`)
-implement this protocol.
+All messaging adapters (`GmailConnector`, `OutlookConnector`, `SlackConnector`,
+`TeamsConnector`) implement this protocol.
 
 #### Lifecycle
 
@@ -87,6 +87,14 @@ Delivery mode: AUTOMATIC (Socket Mode real-time).
 Auth: Bot token (`xoxb-`) or User token (`xoxp-`), optional App-level token (`xapp-`).
 Setup: [Slack Setup Guide](design/slack/setup.md)
 
+#### TeamsConnector
+
+**Import**: `from appif.adapters.teams import TeamsConnector`
+
+Delivery mode: AUTOMATIC (delta-query polling of chats and, optionally, channels).
+Auth: OAuth 2.0 via MSAL (may share the Outlook Azure app registration; separate
+token cache). Setup: [Teams usage guide](usage.md)
+
 ---
 
 ## Messaging Domain Models
@@ -102,6 +110,7 @@ Person who authored a message, resolved by the connector.
 | `id` | `str` | Platform user ID |
 | `display_name` | `str` | Human-readable name |
 | `connector` | `str` | Which connector resolved this identity |
+| `email` | `str \| None` | Email address when resolvable (equals `id` for email connectors; `None` if unknown) |
 
 ### MessageContent
 
@@ -147,7 +156,21 @@ Canonical inbound message event received by listeners.
 | `author` | `Identity` | required | Message author |
 | `timestamp` | `datetime` | required | When the message was sent |
 | `content` | `MessageContent` | required | Message body and attachments |
+| `recipients` | `Recipients` | empty | Addressed recipients by role (to/cc/bcc) |
 | `metadata` | `dict` | `{}` | Connector-specific metadata |
+
+### Recipients
+
+The addressed recipients of a message, by role. Each list holds resolved
+`Identity` objects; all default to empty, so connectors that cannot determine
+recipients simply leave them empty. `bcc` is normally only populated on messages
+you sent yourself.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `to` | `list[Identity]` | `[]` | Primary recipients |
+| `cc` | `list[Identity]` | `[]` | Carbon-copy recipients |
+| `bcc` | `list[Identity]` | `[]` | Blind-carbon-copy recipients (own sent mail only) |
 
 ### SendReceipt
 
@@ -276,6 +299,7 @@ is used.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
+| `attach_file` | `(key, filename, content: bytes) -> ItemAttachment` | Attach a file to a work item |
 | `download_attachment` | `(attachment_id) -> AttachmentContent` | Download attachment content by ID |
 
 #### Projects

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Outlook now retries transient failures.** The connector and poller made
+  raw HTTP calls with no retry/back-off (the module targeting the msgraph SDK
+  was dead code); they now route through a shared Graph HTTP layer that retries
+  429/5xx with `Retry-After`. Expired delta tokens (HTTP 410) are handled on the
+  same error-driven path (also fixes a latent Teams delta-expiry case).
+- **Outlook and Teams deliver events off-thread.** Both dispatched inbound
+  messages to listeners synchronously on the poll thread, so a slow listener
+  stalled polling — violating the `MessageListener` fire-and-forget contract.
+  All connectors now dispatch on a thread pool, like Gmail and Slack.
+
+### Changed
+
+- Internal refactor to reduce duplication (no public API change): shared
+  `BaseMessagingConnector`/`BasePoller`, a single Graph HTTP + MSAL auth layer
+  for Outlook/Teams, and a shared CLI helper module.
+
+### Removed
+
+- Dead code: unused `domain/lifecycle.py`, `domain/credentials.py`, the unused
+  semantic error subclasses in `domain/errors.py`, the empty `infrastructure/`
+  package, and one-off proof scripts superseded by the `appif-slack` CLI.
+- Redundant/stale docs: `ADAPTERS.md` (duplicated `docs/usage.md` +
+  `docs/api_reference.md`, and had drifted out of date), an orphaned
+  `email_monitor` design, and completed development checklists.
+
 ## [1.5.0] - 2026-06-08
 
 ### Added

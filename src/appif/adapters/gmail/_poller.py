@@ -8,9 +8,9 @@ registered callback for normalisation and listener delivery.
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable
 
+from appif.adapters._base import BasePoller
 from appif.adapters.gmail._rate_limiter import call_with_retry
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _CONNECTOR_NAME = "gmail"
 
 
-class GmailPoller:
+class GmailPoller(BasePoller):
     """Polls Gmail history API for new messages.
 
     Parameters
@@ -44,48 +44,21 @@ class GmailPoller:
         poll_interval: int = 30,
         on_new_messages: Callable[[list[dict]], None],
     ) -> None:
+        super().__init__(poll_interval)
         self._service = service
         self._account_id = account_id
         self._label_filter = label_filter or ["INBOX"]
-        self._poll_interval = poll_interval
         self._on_new_messages = on_new_messages
-
-        # State
         self._history_id: int | None = None
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
 
-    def start(self) -> None:
-        """Seed the history ID and launch the polling daemon thread."""
-        if self._thread is not None and self._thread.is_alive():
-            return
+    connector_name = _CONNECTOR_NAME
 
-        # Seed history ID from profile
+    def _on_start(self) -> None:
+        # Seed the history ID from the profile before the loop starts.
         self._seed_history_id()
 
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._poll_loop,
-            name="gmail-poller",
-            daemon=True,
-        )
-        self._thread.start()
-        logger.info(
-            "gmail.poller.started",
-            extra={
-                "labels": self._label_filter,
-                "interval": self._poll_interval,
-                "history_id": self._history_id,
-            },
-        )
-
-    def stop(self) -> None:
-        """Signal the polling thread to stop and wait for it."""
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=self._poll_interval * 2)
-            self._thread = None
-        logger.info("gmail.poller.stopped")
+    def _start_log_extra(self) -> dict:
+        return {"labels": self._label_filter, "interval": self._poll_interval, "history_id": self._history_id}
 
     # ── Internal ──────────────────────────────────────────────
 
@@ -93,17 +66,6 @@ class GmailPoller:
         """Get the current history ID from the user's profile."""
         profile = call_with_retry(self._service.users().getProfile(userId="me").execute)
         self._history_id = int(profile["historyId"])
-
-    def _poll_loop(self) -> None:
-        """Main polling loop — runs until stop_event is set."""
-        while not self._stop_event.is_set():
-            try:
-                self._poll_cycle()
-            except Exception:
-                logger.exception("gmail.poller.cycle_error")
-
-            # Interruptible sleep
-            self._stop_event.wait(timeout=self._poll_interval)
 
     def _poll_cycle(self) -> None:
         """Execute a single poll cycle using history.list."""

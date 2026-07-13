@@ -20,7 +20,7 @@ class TestMsalAuth:
         if cache_data is not None:
             (cred_dir / "default.json").write_text(cache_data)
 
-        with patch("appif.adapters.outlook._auth.msal") as mock_msal:
+        with patch("appif.adapters._graph.msal.msal") as mock_msal:
             mock_cache = MagicMock()
             mock_cache.has_state_changed = False
             mock_cache.serialize.return_value = '{"cached": true}'
@@ -111,7 +111,7 @@ class TestMsalAuth:
         cred_dir = tmp_path / "outlook"
         cred_dir.mkdir(parents=True, exist_ok=True)
 
-        with patch("appif.adapters.outlook._auth.msal") as mock_msal:
+        with patch("appif.adapters._graph.msal.msal") as mock_msal:
             mock_cache = MagicMock()
             mock_cache.has_state_changed = False
             mock_msal.SerializableTokenCache.return_value = mock_cache

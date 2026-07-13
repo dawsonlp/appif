@@ -12,9 +12,9 @@ for v1; this mirrors the Outlook delta-polling model.
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable
 
+from appif.adapters._base import BasePoller
 from appif.adapters.teams._normalizer import normalize_message
 from appif.adapters.teams._rate_limiter import graph_get
 from appif.domain.messaging.errors import NotAuthorized, TargetUnavailable
@@ -26,7 +26,7 @@ _CONNECTOR_NAME = "teams"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
-class TeamsPoller:
+class TeamsPoller(BasePoller):
     """Polls Graph delta queries for new chat and channel messages.
 
     Parameters
@@ -59,10 +59,10 @@ class TeamsPoller:
         include_chats: bool = True,
         include_channels: bool = True,
     ) -> None:
+        super().__init__(poll_interval)
         self._access_token_fn = access_token_fn
         self._account_id = account_id
         self._authenticated_user_id = authenticated_user_id
-        self._poll_interval = poll_interval
         self._callback = callback
         self._include_sent = include_sent
         self._include_chats = include_chats
@@ -72,44 +72,23 @@ class TeamsPoller:
         self._delta_links: dict[str, str] = {}
         # cached (team_id, channel_id) pairs, discovered once at start
         self._channels: list[tuple[str, str]] = []
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
+
+    connector_name = _CONNECTOR_NAME
 
     # ── Lifecycle ─────────────────────────────────────────────
 
-    def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
-            return
+    def _on_start(self) -> None:
         if self._include_channels:
             try:
                 self._channels = self._discover_channels()
             except Exception as exc:
                 logger.warning("teams.poller.channel_discovery_failed", extra={"error": str(exc)})
                 self._channels = []
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._poll_loop, name="teams-poller", daemon=True)
-        self._thread.start()
-        logger.info(
-            "teams.poller.started",
-            extra={"interval": self._poll_interval, "channels": len(self._channels), "chats": self._include_chats},
-        )
 
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=self._poll_interval * 2)
-            self._thread = None
-        logger.info("teams.poller.stopped")
+    def _start_log_extra(self) -> dict:
+        return {"interval": self._poll_interval, "channels": len(self._channels), "chats": self._include_chats}
 
     # ── Polling ───────────────────────────────────────────────
-
-    def _poll_loop(self) -> None:
-        while not self._stop_event.is_set():
-            try:
-                self._poll_cycle()
-            except Exception:
-                logger.exception("teams.poller.cycle_error")
-            self._stop_event.wait(timeout=self._poll_interval)
 
     def _poll_cycle(self) -> None:
         if self._include_chats:

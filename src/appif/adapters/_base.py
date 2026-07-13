@@ -107,3 +107,65 @@ class BaseMessagingConnector:
                 f"{self.connector_name}.listener_error",
                 extra={"listener": type(listener).__name__, "message_id": event.message_id},
             )
+
+
+class BasePoller:
+    """Shared daemon-thread machinery for polling connectors.
+
+    Owns the stop event, the daemon thread, and the poll loop. Subclasses set
+    ``connector_name``, pass ``poll_interval`` to ``super().__init__``, implement
+    ``_poll_cycle()`` (one polling pass), and may override ``_on_start()`` for
+    pre-loop setup (history seeding, source discovery) and ``_start_log_extra()``
+    for the fields logged when the poller starts.
+    """
+
+    connector_name: str = "connector"
+
+    def __init__(self, poll_interval: int) -> None:
+        self._poll_interval = poll_interval
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        """Run pre-loop setup and launch the polling daemon thread."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._on_start()
+        self._stop_event.clear()
+        self._thread = threading.Thread(
+            target=self._poll_loop,
+            name=f"{self.connector_name}-poller",
+            daemon=True,
+        )
+        self._thread.start()
+        logger.info(f"{self.connector_name}.poller.started", extra=self._start_log_extra())
+
+    def stop(self) -> None:
+        """Signal the polling thread to stop and wait for it."""
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self._poll_interval * 2)
+            self._thread = None
+        logger.info(f"{self.connector_name}.poller.stopped")
+
+    def _poll_loop(self) -> None:
+        """Main polling loop — runs until the stop event is set."""
+        while not self._stop_event.is_set():
+            try:
+                self._poll_cycle()
+            except Exception:
+                logger.exception(f"{self.connector_name}.poller.cycle_error")
+            self._stop_event.wait(timeout=self._poll_interval)
+
+    # -- Hooks for subclasses ------------------------------------------------
+
+    def _on_start(self) -> None:
+        """Optional pre-loop setup (history seeding, source discovery)."""
+
+    def _start_log_extra(self) -> dict:
+        """Fields logged with the ``<connector>.poller.started`` event."""
+        return {"interval": self._poll_interval}
+
+    def _poll_cycle(self) -> None:
+        """Execute a single polling pass. Implemented by subclasses."""
+        raise NotImplementedError

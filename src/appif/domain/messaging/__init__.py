@@ -1,8 +1,7 @@
 """Messaging connector domain — canonical event model and connector interface.
 
 These types are connector-agnostic. They apply to all messaging connectors
-(Slack, Teams, Email, etc.) and are separate from the content-extraction
-models used by viewer connectors (Economist, Foreign Affairs, etc.).
+(Gmail, Outlook, Slack, Teams).
 """
 
 from appif.domain.messaging.errors import (

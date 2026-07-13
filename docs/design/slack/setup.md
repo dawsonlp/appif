@@ -86,14 +86,14 @@ APPIF_SLACK_BOT_APP_LEVEL_TOKEN=xapp-your-app-level-token
 ## 6. Verify
 
 ```bash
-# Using the verification script
-python scripts/slack_listener.py
+# Check identity, capabilities, and delivery mode
+appif-slack bot status
 
-# Or using the CLI
-python -m appif.cli.slack listen
+# Connect via Socket Mode and stream messages (requires an app-level token)
+appif-slack bot listen
 ```
 
-The script prints the identity type, capabilities, and delivery mode. If an app-level token is present it connects via Socket Mode and streams messages. Without an app-level token it reports API-only mode and exits.
+`appif-slack bot status` prints the identity type, capabilities, and delivery mode. `appif-slack bot listen` connects via Socket Mode and streams messages when an app-level token is present; without one, the connector reports API-only mode.
 
 ### CLI (identity-first)
 

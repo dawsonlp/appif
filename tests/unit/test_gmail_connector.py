@@ -334,8 +334,8 @@ class TestGmailConnectorListeners:
         # Simulate _safe_listener_call
         event = MagicMock()
         event.message_id = "test"
-        GmailConnector._safe_listener_call(bad_listener, event)  # Should not raise
-        GmailConnector._safe_listener_call(good_listener, event)
+        connector._safe_listener_call(bad_listener, event)  # Should not raise
+        connector._safe_listener_call(good_listener, event)
 
         good_listener.on_message.assert_called_once_with(event)
 

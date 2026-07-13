@@ -13,10 +13,8 @@ event delivery; without it the connector works in API-only mode.
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,11 +22,13 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from slack_sdk import WebClient
 
+from appif.adapters._base import BaseMessagingConnector
+from appif.adapters._util import env_bool
 from appif.adapters.slack._auth import StaticTokenAuth
 from appif.adapters.slack._normalizer import normalize_message
 from appif.adapters.slack._rate_limiter import call_with_retry
 from appif.adapters.slack._user_cache import UserCache
-from appif.domain.messaging.errors import NotAuthorized, NotSupported, TransientFailure
+from appif.domain.messaging.errors import NotAuthorized, TransientFailure
 from appif.domain.messaging.models import (
     Account,
     BackfillScope,
@@ -36,26 +36,16 @@ from appif.domain.messaging.models import (
     ConnectorStatus,
     ConversationRef,
     MessageContent,
-    MessageEvent,
     SendReceipt,
     Target,
 )
-from appif.domain.messaging.ports import MessageListener
 
 logger = logging.getLogger(__name__)
 
 _CONNECTOR_NAME = "slack"
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ("1", "true", "yes", "on")
-
-
-class SlackConnector:
+class SlackConnector(BaseMessagingConnector):
     """Adapter that bridges Slack to the domain messaging port.
 
     All public methods are synchronous, conforming to the
@@ -79,6 +69,8 @@ class SlackConnector:
 
     # -- construction ---------------------------------------------------------
 
+    connector_name = _CONNECTOR_NAME
+
     def __init__(
         self,
         *,
@@ -86,13 +78,11 @@ class SlackConnector:
         app_token: str | None = None,
         include_sent: bool | None = None,
     ) -> None:
+        super().__init__()
         self._auth = StaticTokenAuth(identity_token=identity_token, app_token=app_token)
         self._auth.validate()
-        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_SLACK_INCLUDE_SENT")
+        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_SLACK_INCLUDE_SENT")
 
-        self._status = ConnectorStatus.DISCONNECTED
-        self._listeners: list[MessageListener] = []
-        self._listeners_lock = threading.Lock()
         self._handler: SocketModeHandler | None = None
         self._socket_thread: threading.Thread | None = None
         self._client: WebClient | None = None
@@ -100,7 +90,6 @@ class SlackConnector:
         self._authenticated_user_id: str | None = None
         self._team_id: str | None = None
         self._team_name: str = ""
-        self._executor: ThreadPoolExecutor | None = None
 
     # -- Connector protocol: lifecycle ----------------------------------------
 
@@ -118,10 +107,7 @@ class SlackConnector:
         try:
             self._client = WebClient(token=self._auth.identity_token)
             self._user_cache = UserCache(self._client)
-            self._executor = ThreadPoolExecutor(
-                max_workers=4,
-                thread_name_prefix="slack-listener",
-            )
+            self._start_dispatch()
 
             # Verify authentication and get identity
             auth_response = self._client.auth_test()
@@ -183,16 +169,10 @@ class SlackConnector:
         except Exception as exc:
             logger.warning("slack.disconnect_error", extra={"error": str(exc)})
         finally:
-            if self._executor:
-                self._executor.shutdown(wait=True, cancel_futures=False)
-                self._executor = None
+            self._stop_dispatch()
             self._client = None
             self._status = ConnectorStatus.DISCONNECTED
             logger.info("slack.disconnected")
-
-    def get_status(self) -> ConnectorStatus:
-        """Return current lifecycle state."""
-        return self._status
 
     # -- Connector protocol: discovery ----------------------------------------
 
@@ -237,22 +217,6 @@ class SlackConnector:
                 break
 
         return targets
-
-    # -- Connector protocol: inbound ------------------------------------------
-
-    def register_listener(self, listener: MessageListener) -> None:
-        """Subscribe a listener to receive inbound message events."""
-        with self._listeners_lock:
-            if listener not in self._listeners:
-                self._listeners.append(listener)
-
-    def unregister_listener(self, listener: MessageListener) -> None:
-        """Remove a previously registered listener."""
-        with self._listeners_lock:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
 
     # -- Connector protocol: outbound -----------------------------------------
 
@@ -348,26 +312,7 @@ class SlackConnector:
             include_sent=self._include_sent,
         )
         if message_event is not None:
-            self._dispatch_event(message_event)
-
-    def _dispatch_event(self, event: MessageEvent) -> None:
-        """Dispatch a MessageEvent to all registered listeners via thread pool."""
-        with self._listeners_lock:
-            listeners = list(self._listeners)
-
-        for listener in listeners:
-            self._executor.submit(self._safe_listener_call, listener, event)
-
-    @staticmethod
-    def _safe_listener_call(listener: MessageListener, event: MessageEvent) -> None:
-        """Invoke a listener, catching and logging any errors."""
-        try:
-            listener.on_message(event)
-        except Exception:
-            logger.exception(
-                "slack.listener_error",
-                extra={"listener": type(listener).__name__, "message_id": event.message_id},
-            )
+            self._dispatch(message_event)
 
     # -- Internal: backfill ---------------------------------------------------
 
@@ -396,20 +341,10 @@ class SlackConnector:
                     include_sent=self._include_sent,
                 )
                 if event is not None:
-                    self._dispatch_event(event)
+                    self._dispatch(event)
 
             if not response.get("has_more", False):
                 break
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
-
-    # -- Internal: helpers ----------------------------------------------------
-
-    def _ensure_connected(self) -> None:
-        """Raise if connector is not in CONNECTED state."""
-        if self._status != ConnectorStatus.CONNECTED:
-            raise NotSupported(
-                _CONNECTOR_NAME,
-                operation=f"not connected (status={self._status.value})",
-            )

@@ -10,16 +10,16 @@ from __future__ import annotations
 import base64
 import logging
 import os
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
+from appif.adapters._base import BaseMessagingConnector
+from appif.adapters._util import env_bool
 from appif.adapters.gmail._auth import FileCredentialAuth, GmailAuth
 from appif.adapters.gmail._message_builder import build_message
 from appif.adapters.gmail._normalizer import normalize_message
 from appif.adapters.gmail._poller import GmailPoller
 from appif.adapters.gmail._rate_limiter import call_with_retry
-from appif.domain.messaging.errors import ConnectorError, NotAuthorized, NotSupported, TransientFailure
+from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TransientFailure
 from appif.domain.messaging.models import (
     Account,
     BackfillScope,
@@ -30,7 +30,6 @@ from appif.domain.messaging.models import (
     SendReceipt,
     Target,
 )
-from appif.domain.messaging.ports import MessageListener
 
 try:
     from googleapiclient.discovery import build as build_service
@@ -42,15 +41,7 @@ logger = logging.getLogger(__name__)
 _CONNECTOR_NAME = "gmail"
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ("1", "true", "yes", "on")
-
-
-class GmailConnector:
+class GmailConnector(BaseMessagingConnector):
     """Gmail adapter implementing the ``Connector`` protocol.
 
     Parameters
@@ -73,6 +64,8 @@ class GmailConnector:
         Defaults to ``APPIF_GMAIL_INCLUDE_SENT`` env var or ``False``.
     """
 
+    connector_name = _CONNECTOR_NAME
+
     def __init__(
         self,
         auth: GmailAuth | None = None,
@@ -82,10 +75,11 @@ class GmailConnector:
         label_filter: list[str] | None = None,
         include_sent: bool | None = None,
     ) -> None:
+        super().__init__()
         self._auth = auth or FileCredentialAuth()
         self._delivery_mode = (delivery_mode or os.environ.get("APPIF_GMAIL_DELIVERY_MODE", "AUTOMATIC")).upper()
         self._poll_interval = poll_interval or int(os.environ.get("APPIF_GMAIL_POLL_INTERVAL_SECONDS", "30"))
-        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_GMAIL_INCLUDE_SENT")
+        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_GMAIL_INCLUDE_SENT")
 
         if label_filter is not None:
             self._label_filter = label_filter
@@ -98,13 +92,9 @@ class GmailConnector:
         if self._include_sent and "SENT" not in self._label_filter:
             self._label_filter.append("SENT")
 
-        # Internal state
-        self._status = ConnectorStatus.DISCONNECTED
+        # Gmail-specific state
         self._service = None
         self._poller: GmailPoller | None = None
-        self._listeners: list[MessageListener] = []
-        self._listeners_lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gmail-dispatch")
 
     # -- Lifecycle -----------------------------------------------------------
 
@@ -114,6 +104,7 @@ class GmailConnector:
             return
 
         self._status = ConnectorStatus.CONNECTING
+        self._start_dispatch()
 
         try:
             # Validate credentials are present
@@ -171,14 +162,10 @@ class GmailConnector:
             logger.warning("gmail.disconnect_error", extra={"error": str(exc)})
         finally:
             self._poller = None
-            self._executor.shutdown(wait=True, cancel_futures=False)
-            self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="gmail-dispatch")
+            self._stop_dispatch()
             self._service = None
             self._status = ConnectorStatus.DISCONNECTED
             logger.info("gmail.disconnected")
-
-    def get_status(self) -> ConnectorStatus:
-        return self._status
 
     # -- Discovery -----------------------------------------------------------
 
@@ -194,20 +181,6 @@ class GmailConnector:
     def list_targets(self, account_id: str) -> list[Target]:
         """Email targets are unbounded — returns empty list per design."""
         return []
-
-    # -- Inbound -------------------------------------------------------------
-
-    def register_listener(self, listener: MessageListener) -> None:
-        with self._listeners_lock:
-            if listener not in self._listeners:
-                self._listeners.append(listener)
-
-    def unregister_listener(self, listener: MessageListener) -> None:
-        with self._listeners_lock:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
 
     # -- Outbound ------------------------------------------------------------
 
@@ -281,7 +254,7 @@ class GmailConnector:
                 )
                 event = normalize_message(full_msg, self._auth.account, include_sent=self._include_sent)
                 if event is not None:
-                    self._dispatch_event(event)
+                    self._dispatch(event)
             except Exception:
                 logger.warning(
                     "gmail.backfill_error",
@@ -338,26 +311,7 @@ class GmailConnector:
         for msg in messages:
             event = normalize_message(msg, self._auth.account, include_sent=self._include_sent)
             if event is not None:
-                self._dispatch_event(event)
-
-    def _dispatch_event(self, event) -> None:
-        """Dispatch a MessageEvent to all registered listeners via thread pool."""
-        with self._listeners_lock:
-            listeners = list(self._listeners)
-
-        for listener in listeners:
-            self._executor.submit(self._safe_listener_call, listener, event)
-
-    @staticmethod
-    def _safe_listener_call(listener, event) -> None:
-        """Invoke a listener, catching and logging any errors."""
-        try:
-            listener.on_message(event)
-        except Exception:
-            logger.exception(
-                "gmail.listener_error",
-                extra={"listener": type(listener).__name__, "message_id": event.message_id},
-            )
+                self._dispatch(event)
 
     def _send_message(self, body: dict) -> SendReceipt:
         """Send a message via the Gmail API."""
@@ -379,11 +333,3 @@ class GmailConnector:
             external_id=msg_id or draft_id or "draft_created",
             timestamp=datetime.now(UTC),
         )
-
-    def _ensure_connected(self) -> None:
-        """Raise if connector is not in CONNECTED state."""
-        if self._status != ConnectorStatus.CONNECTED:
-            raise NotSupported(
-                _CONNECTOR_NAME,
-                operation=f"not connected (status={self._status.value})",
-            )

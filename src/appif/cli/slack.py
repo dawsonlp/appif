@@ -259,7 +259,7 @@ def _cmd_messages(identity: str, channel: str | None, since: str | None, limit: 
 
         oldest = parse_since(since) if since else None
         scope = BackfillScope(
-            conversation_ids=conversation_ids,
+            conversation_ids=tuple(conversation_ids),
             oldest=oldest,
         )
 
@@ -284,7 +284,7 @@ def _cmd_messages(identity: str, channel: str | None, since: str | None, limit: 
         for ev in events:
             ts = ev.timestamp.astimezone(UTC).strftime("%H:%M:%S")
             text = ev.content.text[:80] + "..." if len(ev.content.text) > 80 else ev.content.text
-            ch_name = ev.conversation.opaque_id.get("channel", "") if ev.conversation else ""
+            ch_name = ev.conversation_ref.opaque_id.get("channel", "") if ev.conversation_ref else ""
             table.add_row(ts, ev.author.display_name, ch_name, text)
 
         console.print(table)

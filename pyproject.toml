@@ -116,6 +116,10 @@ mypy_path = "src"
 # signal; correctness there is covered by unit tests. Run `mypy` (no args) to
 # check the domain; CI gates it.
 files = ["src/appif/domain"]
+# The domain imports the jira adapter (work_tracking service), so mypy follows
+# into adapter code. "silent" uses those modules for type info but suppresses
+# their errors, keeping the domain check hermetic and env-independent.
+follow_imports = "silent"
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

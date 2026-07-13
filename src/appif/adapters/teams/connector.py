@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
+from appif.adapters._base import BaseMessagingConnector
+from appif.adapters._util import env_bool
 from appif.adapters.teams._auth import MsalAuth, scopes_for
 from appif.adapters.teams._message_builder import build_message
 from appif.adapters.teams._normalizer import normalize_message
@@ -30,11 +31,9 @@ from appif.domain.messaging.models import (
     ConnectorStatus,
     ConversationRef,
     MessageContent,
-    MessageEvent,
     SendReceipt,
     Target,
 )
-from appif.domain.messaging.ports import MessageListener
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +41,7 @@ _CONNECTOR_NAME = "teams"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
-    """Parse a boolean environment variable. Truthy: 1/true/yes/on."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in ("1", "true", "yes", "on")
-
-
-class TeamsConnector:
+class TeamsConnector(BaseMessagingConnector):
     """Microsoft Teams adapter implementing the ``Connector`` protocol.
 
     Parameters
@@ -72,6 +63,8 @@ class TeamsConnector:
         ``ChannelMessage.Read.All``.
     """
 
+    connector_name = _CONNECTOR_NAME
+
     def __init__(
         self,
         client_id: str | None = None,
@@ -85,6 +78,7 @@ class TeamsConnector:
         include_chats: bool | None = None,
         include_channels: bool | None = None,
     ) -> None:
+        super().__init__()
         self._client_id = (
             client_id or os.environ.get("APPIF_TEAMS_CLIENT_ID") or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
         )
@@ -102,21 +96,18 @@ class TeamsConnector:
             or os.environ.get("APPIF_TEAMS_CREDENTIALS_DIR", str(Path.home() / ".config" / "appif" / "teams"))
         )
         self._poll_interval = poll_interval or int(os.environ.get("APPIF_TEAMS_POLL_INTERVAL_SECONDS", "30"))
-        self._include_sent = include_sent if include_sent is not None else _env_bool("APPIF_TEAMS_INCLUDE_SENT")
+        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_TEAMS_INCLUDE_SENT")
         self._include_chats = (
-            include_chats if include_chats is not None else _env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
+            include_chats if include_chats is not None else env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
         )
         # Channels are opt-in: ChannelMessage.Read.All requires admin consent,
         # so enabling them by default would surface NotAuthorized for anyone
         # who only consented the (no-admin-needed) chat scopes.
         self._include_channels = (
-            include_channels if include_channels is not None else _env_bool("APPIF_TEAMS_INCLUDE_CHANNELS", False)
+            include_channels if include_channels is not None else env_bool("APPIF_TEAMS_INCLUDE_CHANNELS", False)
         )
 
-        # Internal state
-        self._status = ConnectorStatus.DISCONNECTED
-        self._listeners: list[MessageListener] = []
-        self._listeners_lock = threading.Lock()
+        # Teams-specific state
         self._auth: MsalAuth | None = None
         self._poller: TeamsPoller | None = None
         self._user_id: str = ""
@@ -135,6 +126,7 @@ class TeamsConnector:
             )
 
         self._status = ConnectorStatus.CONNECTING
+        self._start_dispatch()
         try:
             self._auth = MsalAuth(
                 self._client_id,
@@ -157,7 +149,7 @@ class TeamsConnector:
                 account_id=self._account,
                 authenticated_user_id=self._user_id,
                 poll_interval=self._poll_interval,
-                callback=self._on_message,
+                callback=self._dispatch,
                 include_sent=self._include_sent,
                 include_chats=self._include_chats,
                 include_channels=self._include_channels,
@@ -186,11 +178,9 @@ class TeamsConnector:
         finally:
             self._poller = None
             self._auth = None
+            self._stop_dispatch()
             self._status = ConnectorStatus.DISCONNECTED
             logger.info("teams.disconnected")
-
-    def get_status(self) -> ConnectorStatus:
-        return self._status
 
     # -- Discovery -----------------------------------------------------------
 
@@ -234,20 +224,6 @@ class TeamsConnector:
                         )
                     )
         return targets
-
-    # -- Inbound -------------------------------------------------------------
-
-    def register_listener(self, listener: MessageListener) -> None:
-        with self._listeners_lock:
-            if listener not in self._listeners:
-                self._listeners.append(listener)
-
-    def unregister_listener(self, listener: MessageListener) -> None:
-        with self._listeners_lock:
-            try:
-                self._listeners.remove(listener)
-            except ValueError:
-                pass
 
     # -- Outbound ------------------------------------------------------------
 
@@ -375,23 +351,7 @@ class TeamsConnector:
                     continue
                 if scope.latest and event.timestamp > scope.latest:
                     continue
-                self._on_message(event)
+                self._dispatch(event)
 
             next_url = data.get("@odata.nextLink")
             params = None
-
-    def _on_message(self, event: MessageEvent) -> None:
-        with self._listeners_lock:
-            listeners = list(self._listeners)
-        for listener in listeners:
-            try:
-                listener.on_message(event)
-            except Exception:
-                logger.exception(
-                    "teams.listener_error",
-                    extra={"listener": type(listener).__name__, "message_id": event.message_id},
-                )
-
-    def _ensure_connected(self) -> None:
-        if self._status != ConnectorStatus.CONNECTED:
-            raise NotSupported(_CONNECTOR_NAME, operation=f"not connected (status={self._status.value})")

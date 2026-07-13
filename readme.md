@@ -92,6 +92,7 @@ See [Configuration](#configuration) for all credential supply options.
 | **Gmail** | Google API (OAuth 2.0) | `history.list` polling | Active |
 | **Outlook / Microsoft 365** | Microsoft Graph API | Delta-query polling | Active |
 | **Slack** | Slack API (Bolt + Socket Mode) | Real-time Socket Mode | Active |
+| **Microsoft Teams** | Microsoft Graph API | Delta-query polling | Active |
 
 ### Work Tracking Adapters
 
@@ -161,7 +162,7 @@ connector = OutlookConnector(
 )
 ```
 
-Gmail and Slack connectors follow the same pattern. When a constructor parameter is omitted, the connector falls back to environment variables (`APPIF_GMAIL_CLIENT_ID`, `APPIF_OUTLOOK_CLIENT_ID`, `APPIF_SLACK_BOT_OAUTH_TOKEN`, etc.). See [.env.example](.env.example) for the full list.
+Gmail, Slack, and Teams connectors follow the same pattern. When a constructor parameter is omitted, the connector falls back to environment variables (`APPIF_GMAIL_CLIENT_ID`, `APPIF_OUTLOOK_CLIENT_ID`, `APPIF_SLACK_BOT_OAUTH_TOKEN`, `APPIF_TEAMS_CLIENT_ID`, etc.). See [.env.example](.env.example) for the full list.
 
 ### Work Tracking
 
@@ -198,20 +199,22 @@ appif/
 │       │   ├── messaging/           # Connector protocol, canonical models, errors
 │       │   └── work_tracking/       # WorkTracker protocol, models, service
 │       ├── adapters/
+│       │   ├── _base.py             # BaseMessagingConnector + BasePoller (shared plumbing)
+│       │   ├── _util.py             # Small shared helpers (env_bool)
+│       │   ├── _graph/              # Shared Graph HTTP + MSAL auth (Outlook, Teams)
 │       │   ├── gmail/               # Gmail messaging connector
 │       │   ├── outlook/             # Outlook messaging connector
 │       │   ├── slack/               # Slack messaging connector
+│       │   ├── teams/               # Microsoft Teams messaging connector
 │       │   └── jira/                # Jira work tracking adapter
-│       ├── cli/                     # CLI entry points (Slack)
-│       └── infrastructure/          # Credential loading
+│       └── cli/                     # CLI entry points (appif-slack, appif-outlook) + shared _common
 ├── tests/
-│   ├── unit/                        # 329 unit tests
+│   ├── unit/                        # Unit tests (run: pytest tests/unit)
 │   ├── integration/                 # Live API tests (Slack, Jira)
 │   └── e2e/
 ├── scripts/                         # OAuth consent flows, cleanup utilities
 ├── docs/design/                     # Design documents per adapter
 ├── pyproject.toml
-├── ADAPTERS.md                      # Detailed adapter documentation
 ├── .env.example
 └── readme.md
 ```
@@ -224,7 +227,7 @@ uv venv .venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# Run all unit tests (329 tests)
+# Run all unit tests
 pytest tests/unit -v
 
 # Run adapter-specific tests
@@ -242,8 +245,8 @@ python scripts/jira_cleanup.py
 ruff check src/ tests/
 ruff format src/ tests/
 
-# Type check
-mypy src/
+# Type check (scoped to the domain layer — see [tool.mypy] in pyproject.toml)
+mypy
 ```
 
 ## Architecture
@@ -282,9 +285,15 @@ src/appif/adapters/<platform>/
 ├── _auth.py             # Authentication (protocol + implementation)
 ├── _normalizer.py       # Platform message -> MessageEvent
 ├── _message_builder.py  # MessageContent -> platform request (email adapters)
-├── _poller.py           # Inbound message detection (email adapters)
+├── _poller.py           # Inbound message detection (polling adapters)
 └── _rate_limiter.py     # Retry + platform error -> domain error mapping
 ```
+
+Plumbing shared by all connectors lives one level up: `adapters/_base.py`
+(`BaseMessagingConnector` — listener registry, status, fire-and-forget
+dispatch; and `BasePoller` — the daemon-thread poll loop) and `adapters/_graph/`
+(one httpx retry layer and one MSAL token-cache auth base shared by the Outlook
+and Teams connectors).
 
 The Jira adapter uses a similar pattern with `adapter.py` (operations), `_auth.py` (YAML config + client), and `_normalizer.py` (API dicts to domain types).
 
@@ -295,19 +304,19 @@ The Jira adapter uses a similar pattern with `adapter.py` (operations), `_auth.p
 | Gmail | OAuth 2.0 (`python scripts/gmail_consent.py <account>`) | [docs/design/gmail/setup.md](docs/design/gmail/setup.md) |
 | Outlook | OAuth 2.0 (`python scripts/outlook_consent.py <account>`) | [docs/design/outlook/setup.md](docs/design/outlook/setup.md) |
 | Slack | Bot + App tokens from Slack app config | [docs/design/slack/setup.md](docs/design/slack/setup.md) |
+| Microsoft Teams | OAuth 2.0 (`python scripts/teams_consent.py <account>`) | [docs/usage.md#teams](docs/usage.md) |
 | Jira | API token (programmatic `register()` or YAML config) | [docs/design/work_tracking/setup.md](docs/design/work_tracking/setup.md) |
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [CHANGELOG.md](CHANGELOG.md) | Version history, breaking changes, and migration guides |
+| [docs/usage.md](docs/usage.md) | **Start here** — unified messaging model, per-connector setup, code examples |
 | [API Reference](docs/api_reference.md) | Complete method signatures, domain models, and error types |
-| [ADAPTERS.md](ADAPTERS.md) | Detailed adapter documentation (all platforms) |
-| [docs/usage.md](docs/usage.md) | Unified messaging model and code examples |
+| [CHANGELOG.md](CHANGELOG.md) | Version history, breaking changes, and migration guides |
 | [docs/design/gmail/](docs/design/gmail/) | Gmail design, technical design, setup |
 | [docs/design/outlook/](docs/design/outlook/) | Outlook design, technical design, setup |
-| [docs/design/slack/](docs/design/slack/) | Slack design, setup, CLI checklist |
+| [docs/design/slack/](docs/design/slack/) | Slack design, technical design, setup |
 | [docs/design/work_tracking/](docs/design/work_tracking/) | Jira requirements, design, technical design, setup |
 | [docs/adr/](docs/adr/) | Architecture decision records |
 

@@ -15,18 +15,16 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from datetime import UTC
 from typing import Annotated
 
 import typer
-from dotenv import load_dotenv
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from appif.adapters.slack.connector import SlackConnector
+from appif.cli._common import CollectorListener, bool_style, complete_since, console, load_env, parse_since
 from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TargetUnavailable, TransientFailure
 from appif.domain.messaging.models import (
     BackfillScope,
@@ -36,7 +34,6 @@ from appif.domain.messaging.models import (
 )
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 # ---------------------------------------------------------------------------
 # Token resolution (UX-1, Environment Configuration)
@@ -51,7 +48,7 @@ _APP_TOKEN_VAR = "APPIF_SLACK_BOT_APP_LEVEL_TOKEN"
 
 def _resolve_tokens(identity: str) -> tuple[str, str | None]:
     """Return (identity_token, app_token) for the given identity."""
-    load_dotenv(Path.home() / ".env")
+    load_env()
     env_var = _TOKEN_MAP[identity]
     identity_token = os.environ.get(env_var, "")
     app_token = os.environ.get(_APP_TOKEN_VAR) or None
@@ -136,13 +133,6 @@ def _print_error(identity: str, exc: ConnectorError) -> None:
 # Tab completion callbacks (UX-3)
 # ---------------------------------------------------------------------------
 
-_TIME_PRESETS = ["5m", "15m", "1h", "4h", "1d", "7d"]
-
-
-def _complete_since(incomplete: str) -> list[str]:
-    return [p for p in _TIME_PRESETS if p.startswith(incomplete)]
-
-
 _channel_cache: list[str] | None = None
 
 
@@ -166,34 +156,6 @@ def _complete_channels(incomplete: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Time string parsing (UX-6)
-# ---------------------------------------------------------------------------
-
-_TIME_PATTERN = re.compile(r"^(\d+)([mhd])$")
-
-
-def _parse_since(since: str) -> datetime:
-    """Parse a time string like '1h', '30m', '7d' into a UTC datetime."""
-    match = _TIME_PATTERN.match(since)
-    if not match:
-        console.print(f"[red]Invalid time format:[/red] {since}\nExpected: 5m, 15m, 1h, 4h, 1d, 7d")
-        raise typer.Exit(1)
-
-    value, unit = int(match.group(1)), match.group(2)
-    delta = {"m": timedelta(minutes=value), "h": timedelta(hours=value), "d": timedelta(days=value)}[unit]
-    return datetime.now(UTC) - delta
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _bool_style(v: bool) -> str:
-    return "[green]yes[/green]" if v else "[red]no[/red]"
-
-
-# ---------------------------------------------------------------------------
 # Listener for listen + messages commands
 # ---------------------------------------------------------------------------
 
@@ -207,16 +169,6 @@ class _RichPrinter:
         header.append(f"[{ts}] ", style="dim")
         header.append(event.author.display_name, style="bold cyan")
         console.print(Panel(event.content.text, title=header, border_style="blue"))
-
-
-class _CollectorListener:
-    """MessageListener that collects events into a list."""
-
-    def __init__(self) -> None:
-        self.events: list[MessageEvent] = []
-
-    def on_message(self, event: MessageEvent) -> None:
-        self.events.append(event)
 
 
 # ---------------------------------------------------------------------------
@@ -235,11 +187,11 @@ def _cmd_status(identity: str) -> None:
         table.add_column("Value")
         table.add_row("identity_type", connector._auth.identity_type)
         table.add_row("delivery_mode", caps.delivery_mode)
-        table.add_row("supports_realtime", _bool_style(caps.supports_realtime))
-        table.add_row("supports_backfill", _bool_style(caps.supports_backfill))
-        table.add_row("supports_threads", _bool_style(caps.supports_threads))
-        table.add_row("supports_reply", _bool_style(caps.supports_reply))
-        table.add_row("supports_auto_send", _bool_style(caps.supports_auto_send))
+        table.add_row("supports_realtime", bool_style(caps.supports_realtime))
+        table.add_row("supports_backfill", bool_style(caps.supports_backfill))
+        table.add_row("supports_threads", bool_style(caps.supports_threads))
+        table.add_row("supports_reply", bool_style(caps.supports_reply))
+        table.add_row("supports_auto_send", bool_style(caps.supports_auto_send))
         console.print(table)
     finally:
         connector.disconnect()
@@ -305,13 +257,13 @@ def _cmd_messages(identity: str, channel: str | None, since: str | None, limit: 
             targets = connector.list_targets(account_id)
             conversation_ids = [t.target_id for t in targets[:10]]
 
-        oldest = _parse_since(since) if since else None
+        oldest = parse_since(since) if since else None
         scope = BackfillScope(
-            conversation_ids=conversation_ids,
+            conversation_ids=tuple(conversation_ids),
             oldest=oldest,
         )
 
-        collector = _CollectorListener()
+        collector = CollectorListener()
         connector.register_listener(collector)
         connector.backfill(account_id, scope)
 
@@ -332,7 +284,7 @@ def _cmd_messages(identity: str, channel: str | None, since: str | None, limit: 
         for ev in events:
             ts = ev.timestamp.astimezone(UTC).strftime("%H:%M:%S")
             text = ev.content.text[:80] + "..." if len(ev.content.text) > 80 else ev.content.text
-            ch_name = ev.conversation.opaque_id.get("channel", "") if ev.conversation else ""
+            ch_name = ev.conversation_ref.opaque_id.get("channel", "") if ev.conversation_ref else ""
             table.add_row(ts, ev.author.display_name, ch_name, text)
 
         console.print(table)
@@ -496,7 +448,7 @@ def _register_commands(sub_app: typer.Typer, identity: str) -> None:
         ] = None,
         since: Annotated[
             str | None,
-            typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=_complete_since),
+            typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=complete_since),
         ] = None,
         limit: Annotated[
             int,

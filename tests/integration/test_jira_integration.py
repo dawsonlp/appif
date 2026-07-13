@@ -16,6 +16,7 @@ them in the Jira UI. Run scripts/jira_cleanup.py when done.
 
 import pytest
 
+from appif.adapters.jira import create_work_tracking_service
 from appif.domain.work_tracking.models import (
     CreateItemRequest,
     ItemCategory,
@@ -23,7 +24,6 @@ from appif.domain.work_tracking.models import (
     ProjectInfo,
     SearchCriteria,
 )
-from appif.domain.work_tracking.service import WorkTrackingService
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -44,7 +44,7 @@ _created_keys: list[str] = []
 @pytest.fixture(scope="module")
 def service():
     """Create a WorkTrackingService connected to the live Jira instance."""
-    svc = WorkTrackingService(auto_load=True)
+    svc = create_work_tracking_service(auto_load=True)
     instances = svc.list_instances()
     names = [i.name for i in instances]
     if INSTANCE not in names:

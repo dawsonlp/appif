@@ -114,12 +114,9 @@ mypy_path = "src"
 # The adapters wrap untyped third-party SDKs (msal, slack-sdk, google-api-client,
 # atlassian-python-api) whose missing stubs produce noise that outweighs the
 # signal; correctness there is covered by unit tests. Run `mypy` (no args) to
-# check the domain; CI gates it.
+# check the domain; CI gates it. The domain imports no adapter code (ADR-002),
+# so this check is naturally hermetic.
 files = ["src/appif/domain"]
-# The domain imports the jira adapter (work_tracking service), so mypy follows
-# into adapter code. "silent" uses those modules for type info but suppresses
-# their errors, keeping the domain check hermetic and env-independent.
-follow_imports = "silent"
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

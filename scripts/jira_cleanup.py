@@ -16,7 +16,7 @@ import argparse
 import json
 from pathlib import Path
 
-from appif.domain.work_tracking.service import WorkTrackingService
+from appif.adapters.jira import create_work_tracking_service
 
 CLEANUP_FILE = Path.home() / ".config" / "appif" / "jira" / "test_cleanup.json"
 INSTANCE = "personal"
@@ -46,7 +46,7 @@ def main():
         print("(dry run -- no changes made)")
         return
 
-    svc = WorkTrackingService(auto_load=True)
+    svc = create_work_tracking_service(auto_load=True)
     svc.set_default(INSTANCE)
     adapter = svc._resolve(INSTANCE)
 

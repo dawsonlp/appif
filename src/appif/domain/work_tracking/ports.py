@@ -1,8 +1,18 @@
 """Work tracking protocol interfaces.
 
-Two protocols separate administrative concerns from operational concerns.
-Agents use ``WorkTracker``. Orchestrators and setup code use
-``InstanceRegistry``. Both may be implemented by the same object.
+Three protocols, split by role in the hexagonal architecture:
+
+- ``WorkTrackerBackend`` is the **driven port** — the per-instance operations a
+  platform adapter (e.g. the Jira adapter) implements. It has no ``instance``
+  routing; each backend represents one connected instance.
+- ``WorkTracker`` and ``InstanceRegistry`` are the **driver-side** interfaces
+  the application uses: ``WorkTracker`` adds ``instance`` routing over a set of
+  backends, and ``InstanceRegistry`` manages that set. ``WorkTrackingService``
+  implements both and holds the registered backends.
+
+The domain depends only on ``WorkTrackerBackend``; concrete adapters are wired
+in by a composition factory in the adapter layer (see ADR-002), so the domain
+never imports an adapter.
 """
 
 from __future__ import annotations
@@ -28,17 +38,56 @@ from appif.domain.work_tracking.models import (
 )
 
 
-class InstanceRegistry(Protocol):
-    """Administrative interface for managing platform instances."""
+class WorkTrackerBackend(Protocol):
+    """Driven port: the per-instance operations a platform adapter implements.
 
-    def register(
-        self,
-        name: str,
-        platform: str,
-        server_url: str,
-        credentials: dict[str, str],
-    ) -> None:
-        """Register a new instance with a unique name."""
+    One backend == one connected instance, so there is no ``instance`` routing
+    here (that belongs to :class:`WorkTracker`). ``platform`` and ``server_url``
+    let the registry describe the instance without knowing the concrete type.
+    """
+
+    @property
+    def platform(self) -> str: ...
+
+    @property
+    def server_url(self) -> str: ...
+
+    def get_item(self, key: str) -> WorkItem: ...
+
+    def create_item(self, request: CreateItemRequest) -> ItemIdentifier: ...
+
+    def add_comment(self, key: str, body: str) -> ItemComment: ...
+
+    def get_transitions(self, key: str) -> list[TransitionInfo]: ...
+
+    def transition(self, key: str, transition_name: str) -> None: ...
+
+    def link_items(self, from_key: str, to_key: str, link_type: LinkType) -> None: ...
+
+    def search(self, criteria: SearchCriteria, offset: int = 0, limit: int = 50) -> SearchResult: ...
+
+    def get_project_issue_types(self, project: str) -> list[IssueTypeInfo]: ...
+
+    def get_link_types(self) -> list[LinkTypeInfo]: ...
+
+    def download_attachment(self, attachment_id: str) -> AttachmentContent: ...
+
+    def attach_file(self, key: str, filename: str, content: bytes) -> ItemAttachment: ...
+
+    def list_projects(self) -> list[ProjectInfo]: ...
+
+    def get_project(self, key: str) -> ProjectInfo: ...
+
+    def create_project(self, request: CreateProjectRequest) -> ProjectInfo: ...
+
+    def delete_project(self, key: str) -> None: ...
+
+
+class InstanceRegistry(Protocol):
+    """Administrative (driver-side) interface for managing platform instances."""
+
+    def register(self, name: str, backend: WorkTrackerBackend, *, make_default: bool = False) -> None:
+        """Register a work tracker backend under a unique name."""
         ...
 
     def unregister(self, name: str) -> None:

@@ -239,15 +239,26 @@ Values: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `ERROR`
 
 ## Work Tracking Domain
 
+### WorkTrackerBackend Protocol (driven port)
+
+**Import**: `from appif.domain.work_tracking.ports import WorkTrackerBackend`
+
+The per-instance operations a platform adapter (e.g. `JiraAdapter`) implements —
+the same operations as `WorkTracker` below but **without** the `instance` keyword
+(one backend represents one connected instance). Also exposes read-only
+`platform: str` and `server_url: str`. This is the port the domain depends on;
+concrete adapters implement it and are wired in by a composition factory (see
+[ADR-002](adr/002-work-tracking-hexagonal-ports.md)).
+
 ### InstanceRegistry Protocol
 
 **Import**: `from appif.domain.work_tracking.ports import InstanceRegistry`
 
-Administrative interface for managing platform instances.
+Administrative (driver-side) interface for managing platform instances.
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `register` | `(name, platform, server_url, credentials) -> None` | Register a new instance |
+| `register` | `(name, backend: WorkTrackerBackend, *, make_default=False) -> None` | Register a backend; the first registered becomes the default |
 | `unregister` | `(name) -> None` | Remove an instance |
 | `list_instances` | `() -> list[InstanceInfo]` | List all registered instances (no credentials) |
 | `set_default` | `(name) -> None` | Designate an instance as the default |
@@ -315,13 +326,19 @@ is used.
 
 **Import**: `from appif.domain.work_tracking.service import WorkTrackingService`
 
-Implements both `InstanceRegistry` and `WorkTracker`. Routes operations
-to the correct adapter. Auto-loads Jira instances from
-`~/.config/appif/jira/config.yaml` at construction.
+Implements both `InstanceRegistry` and `WorkTracker`. Routes operations to the
+registered `WorkTrackerBackend` named by `instance` (or the default). Depends
+only on the port — the caller wires in the concrete adapter.
 
 ```python
-service = WorkTrackingService()  # auto_load=True by default
-service = WorkTrackingService(auto_load=False)  # skip YAML loading
+from appif.adapters.jira import JiraAdapter, create_work_tracking_service
+
+# Programmatic: construct and register a backend
+service = WorkTrackingService()
+service.register("prod", JiraAdapter(url, creds), make_default=True)
+
+# CLI / local dev convenience: pre-load instances from YAML config
+service = create_work_tracking_service()  # auto_load=True by default
 ```
 
 ---

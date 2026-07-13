@@ -27,11 +27,8 @@ import os
 import sys
 from pathlib import Path
 
-SCOPES = [
-    "https://graph.microsoft.com/Mail.ReadWrite",
-    "https://graph.microsoft.com/Mail.Send",
-    "https://graph.microsoft.com/User.Read",
-]
+# Source of truth: keep consent scopes in lock-step with the connector.
+from appif.adapters.outlook._auth import _DEFAULT_SCOPES as SCOPES
 
 DEFAULT_DIR = Path.home() / ".config" / "appif" / "outlook"
 
@@ -62,7 +59,7 @@ def main() -> None:
         import msal  # type: ignore[import-untyped]
     except ImportError:
         print("❌  msal is not installed.")
-        print('   Run: uv pip install -e ".[outlook]"')
+        print('   Run: uv pip install -e "."')
         sys.exit(1)
 
     # ── build the MSAL application ────────────────────────────

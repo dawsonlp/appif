@@ -1,6 +1,6 @@
 [project]
 name = "appif"
-version = "1.4.0"
+version = "1.5.0"
 description = "Messaging connectors giving AI agents authenticated, normalized access to email and chat platforms"
 authors = [{name = "ldawson"}]
 readme = "readme.md"
@@ -110,6 +110,16 @@ line-length = 120
 [tool.mypy]
 python_version = "3.13"
 mypy_path = "src"
+# Scoped to the domain layer, where type-checking is high-signal and clean.
+# The adapters wrap untyped third-party SDKs (msal, slack-sdk, google-api-client,
+# atlassian-python-api) whose missing stubs produce noise that outweighs the
+# signal; correctness there is covered by unit tests. Run `mypy` (no args) to
+# check the domain; CI gates it.
+files = ["src/appif/domain"]
+# The domain imports the jira adapter (work_tracking service), so mypy follows
+# into adapter code. "silent" uses those modules for type info but suppresses
+# their errors, keeping the domain check hermetic and env-independent.
+follow_imports = "silent"
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

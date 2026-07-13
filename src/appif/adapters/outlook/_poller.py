@@ -8,12 +8,12 @@ and dispatched to the registered callback.
 from __future__ import annotations
 
 import logging
-import threading
 from collections.abc import Callable
 
-import httpx
-
+from appif.adapters._base import BasePoller
 from appif.adapters.outlook._normalizer import normalize_message
+from appif.adapters.outlook._rate_limiter import graph_get
+from appif.domain.messaging.errors import NotAuthorized, TargetUnavailable
 from appif.domain.messaging.models import MessageEvent
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ _CONNECTOR_NAME = "outlook"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
-class OutlookPoller:
+class OutlookPoller(BasePoller):
     """Polls Microsoft Graph delta queries for new mail messages.
 
     Parameters
@@ -56,52 +56,21 @@ class OutlookPoller:
         sent_ids: set[str],
         include_sent: bool = False,
     ) -> None:
+        super().__init__(poll_interval)
         self._access_token_fn = access_token_fn
         self._account_id = account_id
         self._folders = folders or ["Inbox"]
-        self._poll_interval = poll_interval
         self._callback = callback
         self._sent_ids = sent_ids
         self._include_sent = include_sent
-
-        # State
         self._delta_links: dict[str, str] = {}  # folder → deltaLink (volatile)
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
 
-    def start(self) -> None:
-        """Launch the polling loop in a daemon thread."""
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._poll_loop,
-            name="outlook-poller",
-            daemon=True,
-        )
-        self._thread.start()
-        logger.info("outlook.poller.started", extra={"folders": self._folders, "interval": self._poll_interval})
+    connector_name = _CONNECTOR_NAME
 
-    def stop(self) -> None:
-        """Signal the polling thread to stop and wait for it."""
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=self._poll_interval * 2)
-            self._thread = None
-        logger.info("outlook.poller.stopped")
+    def _start_log_extra(self) -> dict:
+        return {"folders": self._folders, "interval": self._poll_interval}
 
-    def _poll_loop(self) -> None:
-        """Main polling loop — runs until stop_event is set."""
-        while not self._stop_event.is_set():
-            try:
-                self._poll_all_folders()
-            except Exception:
-                logger.exception("outlook.poller.cycle_error")
-
-            # Interruptible sleep
-            self._stop_event.wait(timeout=self._poll_interval)
-
-    def _poll_all_folders(self) -> None:
+    def _poll_cycle(self) -> None:
         """Poll each configured folder for delta changes."""
         for folder in self._folders:
             try:
@@ -111,8 +80,7 @@ class OutlookPoller:
 
     def _poll_folder(self, folder: str) -> None:
         """Poll a single folder using delta queries."""
-        token = self._access_token_fn()
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": f"Bearer {self._access_token_fn()}"}
 
         delta_link = self._delta_links.get(folder)
 
@@ -131,27 +99,18 @@ class OutlookPoller:
 
         while url:
             try:
-                response = httpx.get(url, headers=headers, timeout=30.0)
-            except httpx.HTTPError as exc:
-                logger.warning("outlook.poller.http_error", extra={"folder": folder, "error": str(exc)})
-                return
-
-            if response.status_code == 410:
-                # Delta link expired — reset and do full sync
+                response = graph_get(url, headers=headers)
+            except TargetUnavailable:
+                # 410 Gone — delta token expired; reset and do a full re-sync.
                 logger.info("outlook.poller.delta_expired", extra={"folder": folder})
                 self._delta_links.pop(folder, None)
                 self._poll_folder(folder)
                 return
-
-            if response.status_code == 401:
+            except NotAuthorized:
                 logger.warning("outlook.poller.auth_expired", extra={"folder": folder})
                 return
-
-            if not response.is_success:
-                logger.warning(
-                    "outlook.poller.unexpected_status",
-                    extra={"folder": folder, "status": response.status_code},
-                )
+            except Exception as exc:
+                logger.warning("outlook.poller.http_error", extra={"folder": folder, "error": str(exc)})
                 return
 
             data = response.json()

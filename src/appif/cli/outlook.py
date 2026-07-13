@@ -14,52 +14,29 @@ from __future__ import annotations
 
 import logging
 import os
-import re
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
-from dotenv import load_dotenv
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from appif.cli._common import bool_style, complete_since, console, load_env, parse_since
 from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TransientFailure
 from appif.domain.messaging.models import (
     ConversationRef,
     MessageContent,
-    MessageEvent,
 )
 
 logger = logging.getLogger(__name__)
-console = Console()
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-_ENV_VARS = {
-    "client_id": "APPIF_OUTLOOK_CLIENT_ID",
-    "client_secret": "APPIF_OUTLOOK_CLIENT_SECRET",
-    "tenant_id": "APPIF_OUTLOOK_TENANT_ID",
-    "account": "APPIF_OUTLOOK_ACCOUNT",
-    "credentials_dir": "APPIF_OUTLOOK_CREDENTIALS_DIR",
-}
-
-
-def _load_env() -> None:
-    """Load ~/.env if available."""
-    env_path = Path.home() / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
 
 
 def _get_connector():
     """Build and connect an OutlookConnector, printing status."""
     from appif.adapters.outlook.connector import OutlookConnector
 
-    _load_env()
+    load_env()
     connector = OutlookConnector()
 
     try:
@@ -98,49 +75,6 @@ def _print_error(exc: ConnectorError) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _bool_style(v: bool) -> str:
-    return "[green]yes[/green]" if v else "[red]no[/red]"
-
-
-_TIME_PATTERN = re.compile(r"^(\d+)([mhd])$")
-_TIME_PRESETS = ["5m", "15m", "1h", "4h", "1d", "7d"]
-
-
-def _parse_since(since: str) -> datetime:
-    """Parse a time string like '1h', '30m', '7d' into a UTC datetime."""
-    match = _TIME_PATTERN.match(since)
-    if not match:
-        console.print(f"[red]Invalid time format:[/red] {since}\nExpected: 5m, 15m, 1h, 4h, 1d, 7d")
-        raise typer.Exit(1)
-    value, unit = int(match.group(1)), match.group(2)
-    delta = {"m": timedelta(minutes=value), "h": timedelta(hours=value), "d": timedelta(days=value)}[unit]
-    return datetime.now(UTC) - delta
-
-
-def _complete_since(incomplete: str) -> list[str]:
-    return [p for p in _TIME_PRESETS if p.startswith(incomplete)]
-
-
-# ---------------------------------------------------------------------------
-# Listener for backfill
-# ---------------------------------------------------------------------------
-
-
-class _CollectorListener:
-    """Collects MessageEvent objects into a list."""
-
-    def __init__(self) -> None:
-        self.events: list[MessageEvent] = []
-
-    def on_message(self, event: MessageEvent) -> None:
-        self.events.append(event)
-
-
-# ---------------------------------------------------------------------------
 # Typer app
 # ---------------------------------------------------------------------------
 
@@ -165,7 +99,7 @@ app = typer.Typer(
 @app.command()
 def status() -> None:
     """Show configuration, connection status, and capabilities."""
-    _load_env()
+    load_env()
 
     # Show configuration
     table = Table(title="Configuration", show_header=True)
@@ -231,11 +165,11 @@ def status() -> None:
         cap_table = Table(title="Capabilities", show_header=True)
         cap_table.add_column("Capability", style="bold")
         cap_table.add_column("Value")
-        cap_table.add_row("supports_realtime", _bool_style(caps.supports_realtime))
-        cap_table.add_row("supports_backfill", _bool_style(caps.supports_backfill))
-        cap_table.add_row("supports_threads", _bool_style(caps.supports_threads))
-        cap_table.add_row("supports_reply", _bool_style(caps.supports_reply))
-        cap_table.add_row("supports_auto_send", _bool_style(caps.supports_auto_send))
+        cap_table.add_row("supports_realtime", bool_style(caps.supports_realtime))
+        cap_table.add_row("supports_backfill", bool_style(caps.supports_backfill))
+        cap_table.add_row("supports_threads", bool_style(caps.supports_threads))
+        cap_table.add_row("supports_reply", bool_style(caps.supports_reply))
+        cap_table.add_row("supports_auto_send", bool_style(caps.supports_auto_send))
         cap_table.add_row("delivery_mode", caps.delivery_mode)
         console.print(cap_table)
     finally:
@@ -267,7 +201,7 @@ def inbox(
     limit: Annotated[int, typer.Option("--limit", "-n", help="Number of messages to show")] = 10,
     since: Annotated[
         str | None,
-        typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=_complete_since),
+        typer.Option("--since", "-s", help="Time window (e.g. 1h, 4h, 1d)", autocompletion=complete_since),
     ] = None,
 ) -> None:
     """Show recent inbox messages."""
@@ -285,7 +219,7 @@ def inbox(
         }
 
         if since:
-            oldest = _parse_since(since)
+            oldest = parse_since(since)
             params["$filter"] = f"receivedDateTime ge {oldest.isoformat()}"
 
         response = httpx.get(
@@ -413,7 +347,7 @@ def consent(
     import subprocess
     import sys
 
-    _load_env()
+    load_env()
 
     cmd = [sys.executable, "scripts/outlook_consent.py", "--account", account]
     if tenant:

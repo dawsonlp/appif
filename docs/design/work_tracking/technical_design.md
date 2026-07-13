@@ -678,10 +678,10 @@ APPIF_JIRA_USERNAME=your-email@example.com
 APPIF_JIRA_API_TOKEN=your-api-token
 ```
 
-### ADAPTERS.md addition
+### Documentation addition
 
-Document the Jira adapter alongside existing Gmail, Outlook, and Slack
-entries with:
+Document the Jira adapter in `docs/usage.md` and `docs/api_reference.md`
+alongside the existing Gmail, Outlook, Slack, and Teams entries with:
 - Environment variables required
 - Supported operations
 - Multi-instance registration example
@@ -735,4 +735,4 @@ Following RULES.md:
 10. `WorkTrackingService` (`service.py`) -- thin routing layer
 11. Service unit tests (`test_work_tracking_service.py`)
 12. Integration tests (gated by marker)
-13. `pyproject.toml`, `.env.example`, `ADAPTERS.md` updates
+13. `pyproject.toml`, `.env.example`, `docs/usage.md` + `docs/api_reference.md` updates

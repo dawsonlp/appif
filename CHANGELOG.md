@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0] - 2026-07-13
+
+Major version bump to signal a **breaking API change** in the work-tracking
+domain (see below). Messaging connectors are unaffected.
+
+### Changed
+
+- **Work tracking is wired hexagonally (breaking).** `WorkTrackingService` now
+  depends only on the new `WorkTrackerBackend` port and no longer imports the
+  Jira adapter, restoring the inward-pointing dependency arrow. Construct the
+  service and register a backend explicitly:
+  `WorkTrackingService()` then
+  `service.register("prod", JiraAdapter(url, creds), make_default=True)`.
+  Removed: the `WorkTrackingService(auto_load=...)` parameter and the
+  `register(name, platform, server_url, credentials)` signature. YAML
+  auto-loading moved to `appif.adapters.jira.create_work_tracking_service()`.
+  See [ADR-002](docs/adr/002-work-tracking-hexagonal-ports.md).
+
+### Fixed
+
+- The domain layer no longer imports any adapter, so the scoped `mypy` check is
+  naturally hermetic; the temporary `follow_imports = "silent"` workaround was
+  removed.
+
 ## [1.5.0] - 2026-07-13
 
 ### Added

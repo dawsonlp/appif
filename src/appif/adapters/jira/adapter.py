@@ -178,6 +178,10 @@ class JiraAdapter:
     def server_url(self) -> str:
         return self._server_url
 
+    @property
+    def platform(self) -> str:
+        return "jira"
+
     # -- Operations --------------------------------------------------------
 
     def get_item(self, key: str) -> WorkItem:

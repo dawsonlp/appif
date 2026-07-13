@@ -41,16 +41,19 @@ All messaging connectors (Gmail, Outlook, Slack, Teams) follow this same pattern
 ```python
 from appif.domain.work_tracking.service import WorkTrackingService
 from appif.domain.work_tracking.models import CreateItemRequest, ItemCategory, SearchCriteria
+from appif.adapters.jira import JiraAdapter
 
-# Supply credentials directly -- no config files needed
-service = WorkTrackingService(auto_load=False)
+# Supply credentials directly -- no config files needed. The caller wires the
+# concrete adapter into the platform-agnostic service.
+service = WorkTrackingService()
 service.register(
-    name="myinstance",
-    platform="jira",
-    server_url="https://mycompany.atlassian.net",
-    credentials={"username": "user@example.com", "api_token": "your-token"},
+    "myinstance",
+    JiraAdapter(
+        "https://mycompany.atlassian.net",
+        {"username": "user@example.com", "api_token": "your-token"},
+    ),
+    make_default=True,
 )
-service.set_default("myinstance")
 
 # Create a ticket (adapter resolves ItemCategory to platform-specific type)
 item = service.create_item(CreateItemRequest(
@@ -166,27 +169,26 @@ Gmail, Slack, and Teams connectors follow the same pattern. When a constructor p
 
 ### Work Tracking
 
-Register Jira instances programmatically with `auto_load=False`:
+Construct a `WorkTrackingService` and register `JiraAdapter` instances with credentials supplied programmatically:
 
 ```python
 from appif.domain.work_tracking.service import WorkTrackingService
+from appif.adapters.jira import JiraAdapter
 
-service = WorkTrackingService(auto_load=False)
+service = WorkTrackingService()
 service.register(
-    name="production",
-    platform="jira",
-    server_url="https://mycompany.atlassian.net",
-    credentials={
-        "username": "bot@mycompany.com",
-        "api_token": get_secret("jira-api-token"),
-    },
+    "production",
+    JiraAdapter(
+        "https://mycompany.atlassian.net",
+        {"username": "bot@mycompany.com", "api_token": get_secret("jira-api-token")},
+    ),
+    make_default=True,
 )
-service.set_default("production")
 ```
 
-Multiple instances can be registered and selected per-call via the `instance` parameter.
+Multiple instances can be registered and selected per-call via the `instance` parameter. The service depends only on the platform-agnostic `WorkTrackerBackend` port — the caller (or a composition factory) wires in the concrete adapter, so the domain never imports an adapter (see [ADR-002](docs/adr/002-work-tracking-hexagonal-ports.md)).
 
-> **CLI and personal development use only:** When `auto_load=True` (the default), the service reads a YAML file at `~/.config/appif/jira/config.yaml` (or `APPIF_JIRA_CONFIG` env var). This exists solely for the appif CLIs and local development scripts. Applications should use `auto_load=False` and supply credentials programmatically.
+> **CLI and personal development use only:** `create_work_tracking_service()` (in `appif.adapters.jira`) builds a service pre-loaded from a YAML file at `~/.config/appif/jira/config.yaml` (or the `APPIF_JIRA_CONFIG` env var). This convenience exists solely for the appif CLIs and local development scripts; applications should construct the service and supply credentials programmatically as above.
 
 ## Project Structure
 

@@ -1,19 +1,28 @@
-"""WorkTrackingService -- thin routing layer.
+"""WorkTrackingService -- multi-instance routing over work tracker backends.
 
-Implements both ``InstanceRegistry`` and ``WorkTracker`` protocols.
-Routes operations to the correct adapter based on instance name.
-Loads configuration from YAML at startup.
+Implements the ``InstanceRegistry`` and ``WorkTracker`` driver-side protocols.
+It holds a set of registered :class:`WorkTrackerBackend` instances (the driven
+port) and routes each operation to the one named by ``instance`` (or the
+default).
+
+Architectural note (see ADR-002): only one work-tracking platform (Jira) is
+implemented today, so a swappable backend port + a routing service is more
+structure than a single hard-wired adapter would need -- a deliberate trade
+against KISS. We keep it because the *more important* goal is preserving the
+hexagonal shape: the domain depends only on the ``WorkTrackerBackend`` port and
+never imports an adapter. Concrete adapters are constructed and registered by a
+composition factory in the adapter layer (``appif.adapters.jira`` provides
+``create_work_tracking_service``). That keeps the dependency arrow pointing
+inward, keeps the domain type-checkable in isolation, and means a second
+platform (or a fake backend in tests) plugs in without touching this file.
 """
 
 from __future__ import annotations
 
-from appif.adapters.jira._auth import load_config
-from appif.adapters.jira.adapter import JiraAdapter
 from appif.domain.work_tracking.errors import (
     InstanceAlreadyRegistered,
     InstanceNotFound,
     NoDefaultInstance,
-    WorkTrackingError,
 )
 from appif.domain.work_tracking.models import (
     AttachmentContent,
@@ -32,86 +41,40 @@ from appif.domain.work_tracking.models import (
     TransitionInfo,
     WorkItem,
 )
+from appif.domain.work_tracking.ports import WorkTrackerBackend
 
 
 class WorkTrackingService:
-    """Routes work tracking operations to registered platform adapters.
+    """Routes work tracking operations to registered backends by instance name.
 
-    At construction, loads Jira instances from the YAML config file
-    (``~/.config/appif/jira/config.yaml`` or ``APPIF_JIRA_CONFIG``).
-    Additional instances can be registered programmatically.
+    Construct it empty and register backends, or use a platform composition
+    factory (e.g. ``appif.adapters.jira.create_work_tracking_service``) to wire
+    and register them for you.
     """
 
-    def __init__(self, *, auto_load: bool = True):
-        self._adapters: dict[str, JiraAdapter] = {}
-        self._platforms: dict[str, str] = {}  # name -> platform
+    def __init__(self) -> None:
+        self._adapters: dict[str, WorkTrackerBackend] = {}
         self._default: str | None = None
-
-        if auto_load:
-            self._load_from_config()
-
-    def _load_from_config(self) -> None:
-        """Auto-register instances from the YAML config file."""
-        config = load_config()
-        instances = config.get("instances", {})
-        default_name = config.get("default")
-
-        for name, instance_cfg in instances.items():
-            # Support both flat format and nested jira/confluence format
-            if "jira" in instance_cfg:
-                jira_cfg = instance_cfg["jira"]
-            else:
-                jira_cfg = instance_cfg
-
-            url = jira_cfg.get("url", "")
-            username = jira_cfg.get("username", "")
-            api_token = jira_cfg.get("api_token", "")
-
-            if url and username and api_token:
-                try:
-                    self.register(
-                        name=name,
-                        platform="jira",
-                        server_url=url,
-                        credentials={"username": username, "api_token": api_token},
-                    )
-                except Exception:
-                    # Log but don't fail startup for one bad instance
-                    pass
-
-        if default_name and default_name in self._adapters:
-            self.set_default(default_name)
-        elif len(self._adapters) == 1:
-            # Auto-default when there's exactly one instance
-            self.set_default(next(iter(self._adapters)))
 
     # -- InstanceRegistry --------------------------------------------------
 
-    def register(
-        self,
-        name: str,
-        platform: str,
-        server_url: str,
-        credentials: dict[str, str],
-    ) -> None:
-        """Register a new instance with a unique name."""
+    def register(self, name: str, backend: WorkTrackerBackend, *, make_default: bool = False) -> None:
+        """Register a work tracker backend under a unique name.
+
+        The first backend registered becomes the default automatically; pass
+        ``make_default=True`` to force a later one to become the default.
+        """
         if name in self._adapters:
             raise InstanceAlreadyRegistered(name)
-
-        if platform == "jira":
-            adapter = JiraAdapter(server_url, credentials, instance_name=name)
-        else:
-            raise WorkTrackingError(f"unsupported platform: {platform}")
-
-        self._adapters[name] = adapter
-        self._platforms[name] = platform
+        self._adapters[name] = backend
+        if make_default or self._default is None:
+            self._default = name
 
     def unregister(self, name: str) -> None:
         """Remove an instance and clean up its state."""
         if name not in self._adapters:
             raise InstanceNotFound(name)
         del self._adapters[name]
-        del self._platforms[name]
         if self._default == name:
             self._default = None
 
@@ -120,11 +83,11 @@ class WorkTrackingService:
         return [
             InstanceInfo(
                 name=name,
-                platform=self._platforms[name],
-                server_url=adapter.server_url,
+                platform=backend.platform,
+                server_url=backend.server_url,
                 is_default=(name == self._default),
             )
-            for name, adapter in self._adapters.items()
+            for name, backend in self._adapters.items()
         ]
 
     def set_default(self, name: str) -> None:
@@ -139,15 +102,15 @@ class WorkTrackingService:
 
     # -- Instance resolution -----------------------------------------------
 
-    def _resolve(self, instance: str | None) -> JiraAdapter:
-        """Resolve an instance name to an adapter."""
+    def _resolve(self, instance: str | None) -> WorkTrackerBackend:
+        """Resolve an instance name to a registered backend."""
         name = instance or self._default
         if name is None:
             raise NoDefaultInstance()
-        adapter = self._adapters.get(name)
-        if adapter is None:
+        backend = self._adapters.get(name)
+        if backend is None:
             raise InstanceNotFound(name)
-        return adapter
+        return backend
 
     # -- WorkTracker -------------------------------------------------------
 

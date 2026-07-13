@@ -245,8 +245,8 @@ python scripts/jira_cleanup.py
 ruff check src/ tests/
 ruff format src/ tests/
 
-# Type check
-mypy src/
+# Type check (scoped to the domain layer — see [tool.mypy] in pyproject.toml)
+mypy
 ```
 
 ## Architecture

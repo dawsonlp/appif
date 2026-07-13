@@ -100,7 +100,9 @@ class MsalTokenCacheAuth:
             )
 
         self._save_cache()
-        logger.debug(f"{self.connector_name}.token_acquired", extra={"account": self._account, "email": self._user_email})
+        logger.debug(
+            f"{self.connector_name}.token_acquired", extra={"account": self._account, "email": self._user_email}
+        )
         return result
 
     # ── Internal ──────────────────────────────────────────────

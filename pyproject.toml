@@ -110,6 +110,12 @@ line-length = 120
 [tool.mypy]
 python_version = "3.13"
 mypy_path = "src"
+# Scoped to the domain layer, where type-checking is high-signal and clean.
+# The adapters wrap untyped third-party SDKs (msal, slack-sdk, google-api-client,
+# atlassian-python-api) whose missing stubs produce noise that outweighs the
+# signal; correctness there is covered by unit tests. Run `mypy` (no args) to
+# check the domain; CI gates it.
+files = ["src/appif/domain"]
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

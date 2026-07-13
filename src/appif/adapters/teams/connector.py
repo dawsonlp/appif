@@ -97,7 +97,9 @@ class TeamsConnector(BaseMessagingConnector):
         )
         self._poll_interval = poll_interval or int(os.environ.get("APPIF_TEAMS_POLL_INTERVAL_SECONDS", "30"))
         self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_TEAMS_INCLUDE_SENT")
-        self._include_chats = include_chats if include_chats is not None else env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
+        self._include_chats = (
+            include_chats if include_chats is not None else env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
+        )
         # Channels are opt-in: ChannelMessage.Read.All requires admin consent,
         # so enabling them by default would surface NotAuthorized for anyone
         # who only consented the (no-admin-needed) chat scopes.

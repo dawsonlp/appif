@@ -26,6 +26,8 @@ jobs:
         run: .venv/bin/ruff check src/ tests/ scripts/ conftest.py
       - name: Ruff format check
         run: .venv/bin/ruff format --check src/ tests/ scripts/ conftest.py
+      - name: Type check (domain)
+        run: .venv/bin/mypy src/appif/domain
 
   test:
     name: Unit Tests

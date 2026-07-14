@@ -16,6 +16,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from appif import config
 from appif.adapters._base import BaseMessagingConnector
 from appif.adapters._util import env_bool
 from appif.adapters.teams._auth import MsalAuth, scopes_for
@@ -79,33 +80,58 @@ class TeamsConnector(BaseMessagingConnector):
         include_channels: bool | None = None,
     ) -> None:
         super().__init__()
+        # Resolve config: constructor arg > teams/config.yaml account > env var.
+        # Credentials fall back to the Outlook Azure app when Teams-specific
+        # values are unset, so a shared app registration works out of the box.
+        name, settings = config.select_account("teams", account, env_account_var="APPIF_TEAMS_ACCOUNT")
+        self._account = name
         self._client_id = (
-            client_id or os.environ.get("APPIF_TEAMS_CLIENT_ID") or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
+            client_id
+            or settings.get("client_id")
+            or os.environ.get("APPIF_TEAMS_CLIENT_ID")
+            or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
         )
         self._client_secret = (
             client_secret
+            or settings.get("client_secret")
             or os.environ.get("APPIF_TEAMS_CLIENT_SECRET")
             or os.environ.get("APPIF_OUTLOOK_CLIENT_SECRET")
         )
         self._tenant_id = (
-            tenant_id or os.environ.get("APPIF_TEAMS_TENANT_ID") or os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
+            tenant_id
+            or settings.get("tenant_id")
+            or os.environ.get("APPIF_TEAMS_TENANT_ID")
+            or os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
         )
-        self._account = account or os.environ.get("APPIF_TEAMS_ACCOUNT", "default")
         self._credentials_dir = Path(
-            credentials_dir
-            or os.environ.get("APPIF_TEAMS_CREDENTIALS_DIR", str(Path.home() / ".config" / "appif" / "teams"))
+            credentials_dir or os.environ.get("APPIF_TEAMS_CREDENTIALS_DIR") or config.service_dir("teams")
         )
-        self._poll_interval = poll_interval or int(os.environ.get("APPIF_TEAMS_POLL_INTERVAL_SECONDS", "30"))
-        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_TEAMS_INCLUDE_SENT")
-        self._include_chats = (
-            include_chats if include_chats is not None else env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
+        self._poll_interval = (
+            poll_interval or settings.get("poll_interval_seconds") or int(os.environ.get("APPIF_TEAMS_POLL_INTERVAL_SECONDS", "30"))
         )
+        if include_sent is not None:
+            self._include_sent = include_sent
+        elif "include_sent" in settings:
+            self._include_sent = bool(settings["include_sent"])
+        else:
+            self._include_sent = env_bool("APPIF_TEAMS_INCLUDE_SENT")
+
+        if include_chats is not None:
+            self._include_chats = include_chats
+        elif "include_chats" in settings:
+            self._include_chats = bool(settings["include_chats"])
+        else:
+            self._include_chats = env_bool("APPIF_TEAMS_INCLUDE_CHATS", True)
+
         # Channels are opt-in: ChannelMessage.Read.All requires admin consent,
         # so enabling them by default would surface NotAuthorized for anyone
         # who only consented the (no-admin-needed) chat scopes.
-        self._include_channels = (
-            include_channels if include_channels is not None else env_bool("APPIF_TEAMS_INCLUDE_CHANNELS", False)
-        )
+        if include_channels is not None:
+            self._include_channels = include_channels
+        elif "include_channels" in settings:
+            self._include_channels = bool(settings["include_channels"])
+        else:
+            self._include_channels = env_bool("APPIF_TEAMS_INCLUDE_CHANNELS", False)
 
         # Teams-specific state
         self._auth: MsalAuth | None = None

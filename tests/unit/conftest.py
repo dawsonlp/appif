@@ -21,15 +21,26 @@ import os
 
 import pytest
 
+from appif import config
+
 
 @pytest.fixture(autouse=True)
-def isolate_appif_env():
-    """Give each unit test a clean, fully-restored ``APPIF_*`` environment."""
+def isolate_appif_env(tmp_path):
+    """Give each unit test a clean, fully-restored ``APPIF_*`` environment.
+
+    Also points appif's config discovery at an empty temp directory and a
+    non-existent env file, so tests never read the developer's real
+    ``~/.config/appif`` YAML or ``~/.env``.
+    """
     saved = dict(os.environ)
     for key in [k for k in os.environ if k.startswith("APPIF_")]:
         del os.environ[key]
+    os.environ["APPIF_CONFIG_DIR"] = str(tmp_path / "appif-config")
+    os.environ["APPIF_ENV_FILE"] = str(tmp_path / "does-not-exist.env")
+    config._env_loaded = False
     try:
         yield
     finally:
         os.environ.clear()
         os.environ.update(saved)
+        config._env_loaded = False

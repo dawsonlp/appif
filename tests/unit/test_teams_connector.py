@@ -44,8 +44,13 @@ class TestConfig:
         assert TeamsConnector(client_id="x")._include_channels is False
 
     def test_default_credentials_dir_is_teams_specific(self):
+        from appif import config
+
         c = TeamsConnector(client_id="x")
-        assert c._credentials_dir.parts[-2:] == ("appif", "teams")
+        # Teams keeps its own subdir under the appif config dir, distinct from
+        # the Outlook cache even though they share an Azure app.
+        assert c._credentials_dir.name == "teams"
+        assert c._credentials_dir == config.service_dir("teams")
 
 
 class TestScopes:

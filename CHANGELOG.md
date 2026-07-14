@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-07-14
+
+### Added
+
+- **Single, discoverable config directory.** All appif configuration now lives
+  under one base dir — resolved as `$APPIF_CONFIG_DIR` > `$XDG_CONFIG_HOME/appif`
+  > `~/.config/appif` — with one subdirectory per service. The new
+  `appif.config` module centralizes path discovery, env-file loading, and
+  account resolution (previously duplicated across adapters).
+- **Per-service YAML with multiple accounts.** Each messaging service reads an
+  `accounts:` + `default:` `config.yaml` (Jira keeps its `instances:` shape), so
+  one service can serve several mailboxes/workspaces:
+  `~/.config/appif/{gmail,outlook,teams,slack}/config.yaml`.
+- **`config` discoverability command** on both CLIs (`appif-slack config`,
+  `appif-outlook config`) — prints the resolved config dir, the env file, and
+  per-service accounts and token caches.
+- **`scripts/generate_config.py`** — mirrors existing `APPIF_*` environment
+  variables into the per-service `config.yaml` structure (mode `0600`;
+  `--dry-run` / `--force`).
+
+### Changed
+
+- **Configuration resolution precedence** is now, for every setting (highest
+  first): explicit constructor argument → the selected account in
+  `<service>/config.yaml` → environment variable. Environment variables (and
+  `~/.env`) remain a fully supported fallback, so nothing breaks for existing
+  setups.
+- **Env-file loading is centralized** in `appif.config.load_env()`, replacing
+  three separate `~/.env` loaders.
+
 ## [2.0.1] - 2026-07-13
 
 ### Fixed

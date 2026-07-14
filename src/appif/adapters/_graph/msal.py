@@ -18,6 +18,7 @@ from pathlib import Path
 
 import msal
 
+from appif import config
 from appif.domain.messaging.errors import NotAuthorized
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class MsalTokenCacheAuth:
     #: Connector name used in errors and log events.
     connector_name: str = "graph"
     #: Cache directory used when the caller does not pass ``credentials_dir``.
-    default_credentials_dir: Path = Path.home() / ".config" / "appif"
+    default_credentials_dir: Path = config.config_dir()
     #: Graph scopes requested when the caller does not pass ``scopes``.
     default_scopes: list[str] = []
     #: Consent script named in ``NotAuthorized`` messages.

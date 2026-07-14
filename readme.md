@@ -111,6 +111,7 @@ Both Slack and Outlook adapters include command-line interfaces:
 pip install appif
 
 # Slack — identity-first commands (bot or user)
+appif-slack config          # show config dir, env file, accounts, token caches
 appif-slack bot status
 appif-slack bot channels
 appif-slack bot send general "Deploy complete"
@@ -118,6 +119,7 @@ appif-slack bot listen
 appif-slack user channels
 
 # Outlook — verify setup and exercise the connector
+appif-outlook config        # same discoverability report
 appif-outlook status
 appif-outlook folders
 appif-outlook inbox --limit 5
@@ -149,6 +151,46 @@ pip install appif
 ## Configuration
 
 All credentials are supplied **programmatically** -- constructor parameters for messaging connectors, and `register()` calls for work tracking adapters. Your application sources credentials however it needs to (vault, environment variables, secrets manager) and passes them directly. No config files are required.
+
+### Config directory (CLI and local development)
+
+For the CLIs and local development, appif discovers configuration from a single, discoverable base directory -- the **config dir** -- with one subdirectory per service:
+
+```
+~/.config/appif/                 # $APPIF_CONFIG_DIR > $XDG_CONFIG_HOME/appif > ~/.config/appif
+├── gmail/config.yaml    + <email>.json        # OAuth token cache
+├── outlook/config.yaml  + <account>.json      # MSAL token cache
+├── teams/config.yaml    + <account>.json      # MSAL token cache
+├── slack/config.yaml
+└── jira/config.yaml
+```
+
+Each messaging service's `config.yaml` holds one or more **named accounts** (Jira uses `instances:`), so a single service can serve several mailboxes/workspaces:
+
+```yaml
+# ~/.config/appif/outlook/config.yaml
+accounts:
+  default:
+    client_id: <azure-app-client-id>
+    tenant_id: common
+  work:
+    client_id: <other-app-client-id>
+    tenant_id: <tenant-guid>
+default: default
+```
+
+**Resolution precedence** for any setting (highest first): explicit constructor argument → the selected account in `<service>/config.yaml` → environment variable. Environment variables (see [.env.example](https://github.com/dawsonlp/appif/blob/main/.env.example)) remain a fully supported fallback, so `~/.env` can stay the shared source for your other tools while appif reads the YAML.
+
+Two helpers:
+
+```bash
+# See where appif discovers config and what it finds (dir, env file, accounts, caches)
+appif-slack config      # (or: appif-outlook config)
+
+# Mirror your existing APPIF_* env vars into the per-service config.yaml structure
+python scripts/generate_config.py            # writes any missing config.yaml (mode 0600)
+python scripts/generate_config.py --dry-run  # preview without writing
+```
 
 ### Messaging
 

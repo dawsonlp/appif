@@ -589,6 +589,38 @@ gmail.disconnect()
 slack.disconnect()
 ```
 
+## Configuration Discovery
+
+For the CLIs and local development, appif reads configuration from a single base
+directory -- the **config dir** -- resolved as
+`$APPIF_CONFIG_DIR` > `$XDG_CONFIG_HOME/appif` > `~/.config/appif` (default).
+Each service has its own subdirectory with a multi-account `config.yaml`
+(Jira uses `instances:`), alongside any OAuth/MSAL token caches:
+
+```
+~/.config/appif/{gmail,outlook,teams,slack,jira}/config.yaml
+```
+
+```yaml
+# ~/.config/appif/slack/config.yaml
+accounts:
+  labs:
+    bot_oauth_token: xoxb-...
+    user_oauth_token: xoxp-...
+    app_level_token: xapp-...
+default: labs
+```
+
+Per-setting **precedence** (highest first): explicit constructor argument →
+the selected account in `<service>/config.yaml` → environment variable. The
+environment variables documented below remain a fully supported fallback, so
+`~/.env` can stay a shared source for other tools while appif prefers the YAML.
+
+- `appif-slack config` / `appif-outlook config` — print the resolved config
+  dir, the env file, and per-service accounts and token caches.
+- `python scripts/generate_config.py` — mirror existing `APPIF_*` env vars into
+  the per-service `config.yaml` structure (mode `0600`; `--dry-run` to preview).
+
 ## Environment Variable Reference
 
 ### Gmail

@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from appif import config
 from appif.adapters.slack.connector import SlackConnector
 from appif.cli._common import CollectorListener, bool_style, complete_since, console, load_env, parse_since
 from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TargetUnavailable, TransientFailure
@@ -43,21 +44,32 @@ _TOKEN_MAP = {
     "bot": "APPIF_SLACK_BOT_OAUTH_TOKEN",
     "user": "APPIF_SLACK_USER_OAUTH_TOKEN",
 }
+_TOKEN_FIELD = {
+    "bot": "bot_oauth_token",
+    "user": "user_oauth_token",
+}
 _APP_TOKEN_VAR = "APPIF_SLACK_BOT_APP_LEVEL_TOKEN"
 
 
 def _resolve_tokens(identity: str) -> tuple[str, str | None]:
-    """Return (identity_token, app_token) for the given identity."""
+    """Return (identity_token, app_token) for the given identity.
+
+    Resolved from the ``slack/config.yaml`` account first (selected by
+    ``APPIF_SLACK_ACCOUNT`` or its ``default:``), then env vars.
+    """
     load_env()
+    _, settings = config.select_account("slack", env_account_var="APPIF_SLACK_ACCOUNT")
     env_var = _TOKEN_MAP[identity]
-    identity_token = os.environ.get(env_var, "")
-    app_token = os.environ.get(_APP_TOKEN_VAR) or None
+    field = _TOKEN_FIELD[identity]
+    identity_token = settings.get(field) or os.environ.get(env_var, "")
+    app_token = settings.get("app_level_token") or os.environ.get(_APP_TOKEN_VAR) or None
 
     if not identity_token:
         console.print(
             Panel(
                 f"[bold red]Token not found[/bold red]\n\n"
-                f"Set [bold]{env_var}[/bold] in ~/.env\n"
+                f"Set [bold]{field}[/bold] in {config.service_config_path('slack')}\n"
+                f"(or [bold]{env_var}[/bold] in ~/.env)\n"
                 f"See: docs/design/slack/setup.md",
                 title="Configuration Error",
                 border_style="red",
@@ -415,6 +427,14 @@ user_app = typer.Typer(help="Connect as yourself")
 
 app.add_typer(bot_app, name="bot")
 app.add_typer(user_app, name="user")
+
+
+@app.command("config")
+def show_config() -> None:
+    """Show where appif discovers configuration and what it finds."""
+    from appif.cli._common import print_config_report
+
+    print_config_report()
 
 
 # ---------------------------------------------------------------------------

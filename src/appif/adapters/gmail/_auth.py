@@ -13,13 +13,12 @@ import os
 from pathlib import Path
 from typing import Protocol
 
+from appif import config
 from appif.domain.messaging.errors import NotAuthorized
 
 logger = logging.getLogger(__name__)
 
 _CONNECTOR_NAME = "gmail"
-
-_DEFAULT_CREDENTIALS_DIR = Path.home() / ".config" / "appif" / "gmail"
 
 _REQUIRED_KEYS = {"refresh_token", "client_id", "client_secret"}
 
@@ -33,15 +32,8 @@ GMAIL_SCOPES = [
 
 
 def _load_env() -> None:
-    """Best-effort load of ~/.env via python-dotenv."""
-    try:
-        from dotenv import load_dotenv
-
-        env_path = Path.home() / ".env"
-        if env_path.exists():
-            load_dotenv(env_path)
-    except ImportError:
-        pass
+    """Best-effort load of the shared env file (see :func:`appif.config.load_env`)."""
+    config.load_env()
 
 
 class GmailAuth(Protocol):
@@ -73,11 +65,16 @@ class FileCredentialAuth:
     Parameters
     ----------
     account:
-        Gmail address (e.g. ``user@gmail.com``). If not provided, read
-        from ``APPIF_GMAIL_ACCOUNT`` environment variable.
+        Gmail address (e.g. ``user@gmail.com``). Resolved (highest precedence
+        first) from this argument, ``APPIF_GMAIL_ACCOUNT``, then the ``default:``
+        account in ``gmail/config.yaml``.
     credentials_dir:
-        Directory containing per-account JSON files. Defaults to
-        ``APPIF_GMAIL_CREDENTIALS_DIR`` env var or ``~/.config/appif/gmail``.
+        Directory containing per-account JSON token caches. Defaults to
+        ``APPIF_GMAIL_CREDENTIALS_DIR`` or ``<appif config dir>/gmail``.
+
+    Client credentials (``client_id`` / ``client_secret``) are resolved
+    ``gmail/config.yaml`` account → env var → cached JSON file, so a rotated
+    secret in the YAML or environment overrides a stale copy in the cache.
     """
 
     def __init__(
@@ -88,9 +85,13 @@ class FileCredentialAuth:
     ) -> None:
         _load_env()
 
-        self._account = account or os.environ.get("APPIF_GMAIL_ACCOUNT", "")
+        name, settings = config.select_account(
+            "gmail", account, env_account_var="APPIF_GMAIL_ACCOUNT", fallback=""
+        )
+        self._account = name
+        self._config = settings
         self._credentials_dir = Path(
-            credentials_dir or os.environ.get("APPIF_GMAIL_CREDENTIALS_DIR", str(_DEFAULT_CREDENTIALS_DIR))
+            credentials_dir or os.environ.get("APPIF_GMAIL_CREDENTIALS_DIR") or config.service_dir("gmail")
         )
         self._creds = None
 
@@ -179,8 +180,10 @@ class FileCredentialAuth:
         # Read raw JSON to supplement client_id/secret from env if needed
         data = json.loads(path.read_text())
 
-        client_id = data.get("client_id") or os.environ.get("APPIF_GMAIL_CLIENT_ID", "")
-        client_secret = data.get("client_secret") or os.environ.get("APPIF_GMAIL_CLIENT_SECRET", "")
+        client_id = self._config.get("client_id") or os.environ.get("APPIF_GMAIL_CLIENT_ID") or data.get("client_id") or ""
+        client_secret = (
+            self._config.get("client_secret") or os.environ.get("APPIF_GMAIL_CLIENT_SECRET") or data.get("client_secret") or ""
+        )
 
         self._creds = Credentials(
             token=data.get("token"),

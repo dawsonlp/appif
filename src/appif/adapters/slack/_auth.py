@@ -11,11 +11,9 @@ event delivery. When absent the connector operates in API-only mode.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from dotenv import load_dotenv
-
+from appif import config
 from appif.domain.messaging.errors import NotAuthorized
 
 _CONNECTOR_NAME = "slack"
@@ -113,7 +111,7 @@ class StaticTokenAuth:
         Reads ``APPIF_SLACK_IDENTITY_TOKEN`` (required) and
         ``APPIF_SLACK_APP_TOKEN`` (optional) from the environment.
         """
-        load_dotenv(Path.home() / ".env")
+        config.load_env()
         return cls(
             identity_token=os.getenv("APPIF_SLACK_IDENTITY_TOKEN", ""),
             app_token=os.getenv("APPIF_SLACK_APP_TOKEN") or None,

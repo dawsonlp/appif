@@ -9,9 +9,9 @@ access-token string (the Teams connector talks to Graph over httpx directly).
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Protocol
 
+from appif import config
 from appif.adapters._graph.msal import MsalTokenCacheAuth
 
 # Graph scopes grouped by capability. Chat scopes need no admin consent;
@@ -60,7 +60,7 @@ class MsalAuth(MsalTokenCacheAuth):
     """Teams auth backed by a persisted MSAL token cache."""
 
     connector_name = "teams"
-    default_credentials_dir = Path.home() / ".config" / "appif" / "teams"
+    default_credentials_dir = config.service_dir("teams")
     default_scopes = _DEFAULT_SCOPES
     consent_script = "scripts/teams_consent.py"
 

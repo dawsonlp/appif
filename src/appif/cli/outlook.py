@@ -22,6 +22,7 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
+from appif import config
 from appif.cli._common import bool_style, complete_since, console, load_env, parse_since
 from appif.domain.messaging.errors import ConnectorError, NotAuthorized, TransientFailure
 from appif.domain.messaging.models import (
@@ -96,6 +97,14 @@ app = typer.Typer(
 # ---------------------------------------------------------------------------
 
 
+@app.command("config")
+def show_config() -> None:
+    """Show where appif discovers configuration and what it finds."""
+    from appif.cli._common import print_config_report
+
+    print_config_report()
+
+
 @app.command()
 def status() -> None:
     """Show configuration, connection status, and capabilities."""
@@ -107,23 +116,27 @@ def status() -> None:
     table.add_column("Value")
     table.add_column("Source", style="dim")
 
-    client_id = os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
-    tenant_id = os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
-    account = os.environ.get("APPIF_OUTLOOK_ACCOUNT", "default")
-    cred_dir = os.environ.get("APPIF_OUTLOOK_CREDENTIALS_DIR", str(Path.home() / ".config" / "appif" / "outlook"))
+    # Resolve the same way the connector does: config.yaml account > env var.
+    account, settings = config.select_account("outlook", env_account_var="APPIF_OUTLOOK_ACCOUNT")
+    client_id = settings.get("client_id") or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
+    tenant_id = settings.get("tenant_id") or os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
+    cred_dir = os.environ.get("APPIF_OUTLOOK_CREDENTIALS_DIR") or str(config.service_dir("outlook"))
     cred_file = Path(cred_dir) / f"{account}.json"
+
+    def _src(key: str, env_name: str) -> str:
+        return "outlook/config.yaml" if settings.get(key) else env_name
 
     table.add_row(
         "Client ID",
         f"{client_id[:8]}...{client_id[-4:]}" if len(client_id) > 12 else (client_id or "[red]NOT SET[/red]"),
-        "APPIF_OUTLOOK_CLIENT_ID",
+        _src("client_id", "APPIF_OUTLOOK_CLIENT_ID"),
     )
-    table.add_row("Tenant ID", tenant_id, "APPIF_OUTLOOK_TENANT_ID")
-    table.add_row("Account", account, "APPIF_OUTLOOK_ACCOUNT")
+    table.add_row("Tenant ID", tenant_id, _src("tenant_id", "APPIF_OUTLOOK_TENANT_ID"))
+    table.add_row("Account", account, "outlook/config.yaml" if account != "default" else "APPIF_OUTLOOK_ACCOUNT")
     table.add_row(
         "Credential file",
         f"{'[green]exists[/green]' if cred_file.exists() else '[red]missing[/red]'} ({cred_file})",
-        "APPIF_OUTLOOK_CREDENTIALS_DIR",
+        str(config.service_dir("outlook")),
     )
     console.print(table)
     console.print()
@@ -132,7 +145,8 @@ def status() -> None:
         console.print(
             Panel(
                 "[bold red]Client ID not configured[/bold red]\n\n"
-                "Set APPIF_OUTLOOK_CLIENT_ID in ~/.env\n"
+                f"Set client_id in {config.service_config_path('outlook')}\n"
+                "(or APPIF_OUTLOOK_CLIENT_ID in ~/.env)\n"
                 "See: docs/design/outlook/setup.md",
                 title="Setup Required",
                 border_style="red",

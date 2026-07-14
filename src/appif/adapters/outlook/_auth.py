@@ -9,11 +9,11 @@ Outlook-specific scopes, the azure-core ``AccessToken`` return type, and the
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Protocol
 
 from azure.core.credentials import AccessToken, TokenCredential
 
+from appif import config
 from appif.adapters._graph.msal import MsalTokenCacheAuth
 
 # Default Graph scopes for mail operations
@@ -38,7 +38,7 @@ class MsalAuth(MsalTokenCacheAuth):
     """Outlook auth backed by a persisted MSAL token cache."""
 
     connector_name = "outlook"
-    default_credentials_dir = Path.home() / ".config" / "appif" / "outlook"
+    default_credentials_dir = config.service_dir("outlook")
     default_scopes = _DEFAULT_SCOPES
     consent_script = "scripts/outlook_consent.py"
 

@@ -6,7 +6,7 @@ using the ``atlassian-python-api`` library.
 
 Config file location (checked in order):
 1. ``APPIF_JIRA_CONFIG`` environment variable
-2. ``~/.config/appif/jira/config.yaml``
+2. ``<appif config dir>/jira/config.yaml`` (see :mod:`appif.config`)
 
 YAML format::
 
@@ -28,16 +28,15 @@ from pathlib import Path
 import yaml
 from atlassian import Jira
 
+from appif import config
 from appif.domain.work_tracking.errors import ConnectionFailure, PermissionDenied
-
-_DEFAULT_CONFIG_PATH = Path.home() / ".config" / "appif" / "jira" / "config.yaml"
 
 
 def _config_path() -> Path:
     env = os.environ.get("APPIF_JIRA_CONFIG")
     if env:
         return Path(env).expanduser()
-    return _DEFAULT_CONFIG_PATH
+    return config.service_config_path("jira")
 
 
 def load_config() -> dict:

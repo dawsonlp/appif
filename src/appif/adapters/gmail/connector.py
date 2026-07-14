@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import UTC, datetime
 
+from appif import config
 from appif.adapters._base import BaseMessagingConnector
 from appif.adapters._util import env_bool
 from appif.adapters.gmail._auth import FileCredentialAuth, GmailAuth
@@ -77,12 +78,33 @@ class GmailConnector(BaseMessagingConnector):
     ) -> None:
         super().__init__()
         self._auth = auth or FileCredentialAuth()
-        self._delivery_mode = (delivery_mode or os.environ.get("APPIF_GMAIL_DELIVERY_MODE", "AUTOMATIC")).upper()
-        self._poll_interval = poll_interval or int(os.environ.get("APPIF_GMAIL_POLL_INTERVAL_SECONDS", "30"))
-        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_GMAIL_INCLUDE_SENT")
+        # Per-account tuning knobs come from the same gmail/config.yaml account
+        # the auth resolved: constructor arg > YAML account > env var > default.
+        _, settings = config.select_account(
+            "gmail", self._auth.account or None, env_account_var="APPIF_GMAIL_ACCOUNT", fallback=""
+        )
+        self._delivery_mode = (
+            delivery_mode or settings.get("delivery_mode") or os.environ.get("APPIF_GMAIL_DELIVERY_MODE", "AUTOMATIC")
+        ).upper()
+        self._poll_interval = (
+            poll_interval or settings.get("poll_interval_seconds") or int(os.environ.get("APPIF_GMAIL_POLL_INTERVAL_SECONDS", "30"))
+        )
+        if include_sent is not None:
+            self._include_sent = include_sent
+        elif "include_sent" in settings:
+            self._include_sent = bool(settings["include_sent"])
+        else:
+            self._include_sent = env_bool("APPIF_GMAIL_INCLUDE_SENT")
 
         if label_filter is not None:
             self._label_filter = label_filter
+        elif settings.get("label_filter"):
+            raw_labels = settings["label_filter"]
+            self._label_filter = (
+                list(raw_labels)
+                if isinstance(raw_labels, list)
+                else [lbl.strip() for lbl in str(raw_labels).split(",") if lbl.strip()]
+            )
         else:
             raw = os.environ.get("APPIF_GMAIL_LABEL_FILTER", "INBOX")
             self._label_filter = [lbl.strip() for lbl in raw.split(",") if lbl.strip()]

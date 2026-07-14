@@ -12,6 +12,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from appif import config
 from appif.adapters._base import BaseMessagingConnector
 from appif.adapters._util import env_bool
 from appif.adapters.outlook._auth import MsalAuth
@@ -81,22 +82,38 @@ class OutlookConnector(BaseMessagingConnector):
         include_sent: bool | None = None,
     ) -> None:
         super().__init__()
-        # Resolve from env with parameter overrides
-        self._client_id = client_id or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
-        self._client_secret = client_secret or os.environ.get("APPIF_OUTLOOK_CLIENT_SECRET")
-        self._tenant_id = tenant_id or os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
-        self._account = account or os.environ.get("APPIF_OUTLOOK_ACCOUNT", "default")
-        self._credentials_dir = Path(
-            credentials_dir
-            or os.environ.get("APPIF_OUTLOOK_CREDENTIALS_DIR", str(Path.home() / ".config" / "appif" / "outlook"))
+        # Resolve config: constructor arg > outlook/config.yaml account > env var.
+        name, settings = config.select_account("outlook", account, env_account_var="APPIF_OUTLOOK_ACCOUNT")
+        self._account = name
+        self._client_id = client_id or settings.get("client_id") or os.environ.get("APPIF_OUTLOOK_CLIENT_ID", "")
+        self._client_secret = (
+            client_secret or settings.get("client_secret") or os.environ.get("APPIF_OUTLOOK_CLIENT_SECRET")
         )
-        self._poll_interval = poll_interval or int(os.environ.get("APPIF_OUTLOOK_POLL_INTERVAL_SECONDS", "30"))
-        self._delivery_mode = delivery_mode or os.environ.get("APPIF_OUTLOOK_DELIVERY_MODE", "poll")
-        self._include_sent = include_sent if include_sent is not None else env_bool("APPIF_OUTLOOK_INCLUDE_SENT")
+        self._tenant_id = tenant_id or settings.get("tenant_id") or os.environ.get("APPIF_OUTLOOK_TENANT_ID", "common")
+        self._credentials_dir = Path(
+            credentials_dir or os.environ.get("APPIF_OUTLOOK_CREDENTIALS_DIR") or config.service_dir("outlook")
+        )
+        self._poll_interval = (
+            poll_interval or settings.get("poll_interval_seconds") or int(os.environ.get("APPIF_OUTLOOK_POLL_INTERVAL_SECONDS", "30"))
+        )
+        self._delivery_mode = delivery_mode or settings.get("delivery_mode") or os.environ.get("APPIF_OUTLOOK_DELIVERY_MODE", "poll")
+        if include_sent is not None:
+            self._include_sent = include_sent
+        elif "include_sent" in settings:
+            self._include_sent = bool(settings["include_sent"])
+        else:
+            self._include_sent = env_bool("APPIF_OUTLOOK_INCLUDE_SENT")
 
         # Parse folder filter
         if folder_filter is not None:
             self._folders = folder_filter
+        elif settings.get("folder_filter"):
+            raw_folders = settings["folder_filter"]
+            self._folders = (
+                list(raw_folders)
+                if isinstance(raw_folders, list)
+                else [f.strip() for f in str(raw_folders).split(",") if f.strip()]
+            )
         else:
             raw = os.environ.get("APPIF_OUTLOOK_FOLDER_FILTER", "Inbox")
             self._folders = [f.strip() for f in raw.split(",") if f.strip()]
